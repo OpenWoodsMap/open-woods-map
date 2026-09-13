@@ -1,6 +1,6 @@
 # Android APK (phone or emulator)
 
-OpenWoodsMap ships for **Android** (and iOS). On a Windows/Mac/Linux PC, install the APK in **BlueStacks** or Android Studio’s emulator.
+OpenWoodsMap ships for **Android** only; [ios.md](ios.md) explains why there is no iPhone build. On a Windows PC or an Apple Silicon Mac, install the APK in **BlueStacks** or Android Studio’s emulator.
 
 ## 1. One-time: Android SDK
 

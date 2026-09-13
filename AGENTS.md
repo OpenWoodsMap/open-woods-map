@@ -51,8 +51,11 @@ anything. The ones most often violated by accident:
   message rather than breaking the card.
 - No province geometry is bundled in the app. Only `data/provinces.json` ships;
   everything else arrives as a downloaded pack.
-- MapLibre only. Android and iOS only, including Android emulators such as
-  BlueStacks.
+- MapLibre only. Android is the only shipped platform, including Android
+ emulators such as BlueStacks. iOS must stay buildable in principle — new
+ packages need an iOS implementation, platform code stays behind conditional
+ imports — but nothing is published and no iOS build has ever been compiled.
+ Do not write copy implying an iPhone build exists. See `docs/ios.md`.
 
 ## Repo map
 

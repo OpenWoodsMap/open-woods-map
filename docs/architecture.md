@@ -9,8 +9,8 @@
 
 | Platform | Status | Notes |
 |----------|--------|--------|
-| **Android** | Supported | MapLibre Native + offline packs; also BlueStacks / Android emulators on PC |
-| **iOS** | Supported | MapLibre Native + offline packs; iOS Simulator on macOS |
+| **Android** | Shipped | MapLibre Native + offline packs; also BlueStacks / Android emulators on a desktop |
+| **iOS** | Code target, not shipped | Must stay buildable in principle, but never compiled and nothing published — free signing expires in 7 days and needs network to renew. See [ios.md](ios.md) |
 | Windows / macOS / Linux (native) | Out of scope | MapLibre Flutter has no desktop engine — use an Android emulator instead |
 | Web | Out of scope | Not a product target |
 

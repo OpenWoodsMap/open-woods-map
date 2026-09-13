@@ -6,9 +6,9 @@
 2. Install [Flutter 3.29+](https://docs.flutter.dev/get-started/install).
 3. Sync GIS assets: `powershell -File scripts\sync_assets.ps1` (from repo root).
 4. `cd app && flutter pub get`
-5. `flutter run` on an **Android or iOS** device/emulator.
+5. `flutter run` on an **Android** device/emulator.
 
-Supported product targets: **Android + iOS** only (Android emulators such as BlueStacks count). Web and native desktop are out of scope.
+Shipped target: **Android** only (Android emulators such as BlueStacks count). Web and native desktop are out of scope. iOS is a code target that must stay buildable in principle — new packages need iOS support and platform code stays behind conditional imports — but nothing is published; see [ios.md](ios.md).
 
 ## Province packs
 

@@ -1,12 +1,20 @@
 # OpenWoodsMap
 
-Offline-first Canadian land map for **Android and iOS**: Crown land, parks, WMUs, and municipalities — with tap-to-identify Land Info (local government + land-use report). No accounts, no servers, no paid map APIs. Free, and no paywall ever.
+Offline-first Canadian land map for **Android**: Crown land, parks, WMUs, and municipalities — with tap-to-identify Land Info (local government + land-use report). No accounts, no servers, no paid map APIs. Free, and no paywall ever.
 
 Anyone heading out needs the same two things: a map that works with no signal, and a straight answer about whose land they are standing on. That part serves hikers, anglers and hunters alike. On top of it, the deepest work so far is hunting legality — seasons, closures and the regulations behind them — because that is where a wrong answer costs the most. Hiking- and fishing-specific features are not built yet, and this README will say so until they are.
 
 **Stack:** Flutter + MapLibre · GeoJSON · zero-infra (app bundle + GitHub Releases)
 
-**Targets:** Android + iOS only. On a Windows/Mac/Linux PC, run the Android build in an emulator such as [BlueStacks](https://www.bluestacks.com/) or Android Studio’s emulator.
+**Targets:** Android. On a Windows PC or an Apple Silicon Mac, run the Android build in an emulator such as [BlueStacks](https://www.bluestacks.com/) or Android Studio’s emulator.
+
+**No iOS build**, and that is deliberate rather than unfinished: the code targets
+iOS, but every free way to install an app on an iPhone stops working after seven
+days and needs a network connection to be renewed, which is unacceptable for an
+app meant to answer a legal question with no signal. iPhone owners can run the
+Android build in a desktop emulator to study boundaries before heading out —
+there is no GPS there, so it is a map for the kitchen table, not one to carry.
+The reasoning, and what would change it, is in [docs/ios.md](docs/ios.md).
 
 ## Quick start
 
@@ -16,7 +24,7 @@ cd C:\_stuff\dev\open-woods-map
 powershell -File scripts\sync_assets.ps1
 cd app
 flutter pub get
-flutter run   # Android device, emulator, or iOS Simulator (on macOS)
+flutter run   # Android device or emulator
 ```
 
 Build a sideload APK: [docs/android_apk.md](docs/android_apk.md).
@@ -129,6 +137,7 @@ the map still zooms in past that, it just stops gaining detail.
 - [AI guidelines](docs/ai_guidelines.md)
 - [Contributing](docs/contributing.md)
 - [Android APK](docs/android_apk.md)
+- [iOS](docs/ios.md)
 - [Offline packs](docs/packs.md)
 - [GIS pipeline](tools/gis/README.md)
 

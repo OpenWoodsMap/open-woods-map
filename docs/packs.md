@@ -75,7 +75,7 @@ If it is missing, unreachable, or served as a captive-portal login page, the
 Offline packs screen says it could not check and describes what is on disk. That
 is the expected state in the bush and is not treated as an error.
 
-## App install (Android / iOS)
+## App install
 
 1. **Import ZIP:** Offline packs → Import ZIP → select `packs/on-overlays.zip` on a device/emulator build.
 2. **Download:** the rolling `packs-latest` release hosts the zips, and
