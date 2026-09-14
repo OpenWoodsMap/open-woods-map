@@ -75,6 +75,21 @@ class _WaypointsPageState extends State<WaypointsPage> {
   /// in force rather than being a setting to remember.
   var _matchAll = false;
 
+  /// What is being searched for, trimmed and lowered once here rather than on
+  /// every comparison. Empty means no search.
+  var _query = '';
+  final _search = TextEditingController();
+
+  /// Whether the tag chips beyond [_tagChipLimit] are on show.
+  var _showAllTags = false;
+
+  /// How many tag chips appear before the rest go behind one more chip.
+  ///
+  /// A wrap of every tag someone has is the honest layout, and with a dozen tags
+  /// it is also most of the screen, on a page whose job is the list underneath.
+  /// Six is about two rows of ordinary tag names.
+  static const _tagChipLimit = 6;
+
   @override
   void initState() {
     super.initState();
@@ -93,6 +108,7 @@ class _WaypointsPageState extends State<WaypointsPage> {
   @override
   void dispose() {
     widget.visibility.removeListener(_onVisibilityChanged);
+    _search.dispose();
     super.dispose();
   }
 
@@ -100,14 +116,41 @@ class _WaypointsPageState extends State<WaypointsPage> {
     if (mounted) setState(() {});
   }
 
-  bool get _filtered => _selected.isNotEmpty;
+  /// Whether anything at all is keeping rows out of the list.
+  ///
+  /// Not the same question as whether tags are picked, which is what decides
+  /// how the list is sectioned. A search alone hides rows without changing what
+  /// the sections are.
+  bool get _filtered => _selected.isNotEmpty || _query.isNotEmpty;
 
-  bool _matches(Waypoint item) {
+  bool _matches(Waypoint item) => _matchesQuery(item) && _matchesTags(item);
+
+  bool _matchesTags(Waypoint item) {
     if (_selected.isEmpty) return true;
     return _matchAll
         ? _selected.every(item.tags.contains)
         : _selected.any(item.tags.contains);
   }
+
+  /// Its name, its tags, or the name of its glyph.
+  ///
+  /// Those are the three things someone remembers about a mark they are looking
+  /// for, and the icon's name is searchable precisely because the picker stopped
+  /// printing it beside every glyph. Notes are deliberately out: they are the
+  /// longest text here and nothing in a row says which field matched, so a hit
+  /// buried in a paragraph would look like a result arriving for no reason.
+  bool _matchesQuery(Waypoint item) {
+    if (_query.isEmpty) return true;
+    return item.name.toLowerCase().contains(_query) ||
+        item.icon.label.toLowerCase().contains(_query) ||
+        item.tags.any((tag) => tag.toLowerCase().contains(_query));
+  }
+
+  void _clearFilters() => setState(() {
+    _selected.clear();
+    _query = '';
+    _search.clear();
+  });
 
   /// Each matching waypoint once, which is what export and every count of "how
   /// many are there" has to be built from.
@@ -136,7 +179,10 @@ class _WaypointsPageState extends State<WaypointsPage> {
   List<Object> get _rows {
     final items = _visible
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    final tags = _filtered
+    // Picked tags, not merely "something is filtering": a search narrows which
+    // items are here without saying anything about which tags to section by, and
+    // keying this off the wider question left a search showing untagged only.
+    final tags = _selected.isNotEmpty
         ? (_selected.toList()..sort())
         : (<String>{for (final item in items) ...item.tags}.toList()..sort());
     final rows = <Object>[];
@@ -228,20 +274,61 @@ class _WaypointsPageState extends State<WaypointsPage> {
               children: [
                 _filterBar(),
                 if (visible.isEmpty)
-                  const Expanded(
-                    child: Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(32),
-                        child: Text('Nothing matches this filter.'),
-                      ),
-                    ),
-                  )
+                  Expanded(child: _nothingMatches())
                 else ...[
                   _tally(visible, rows.whereType<Waypoint>().length),
                   Expanded(child: _list(rows)),
                 ],
               ],
             ),
+    );
+  }
+
+  /// An empty list with a filter on, saying which filter and how to leave.
+  ///
+  /// The one screen in this app where an empty list can read as lost data, so it
+  /// names the thing doing the hiding and states the count still saved. "Nothing
+  /// matches this filter" did neither, and with a search added there would be two
+  /// possible culprits and no way to tell which.
+  Widget _nothingMatches() {
+    final held = describeItems(widget.store.items);
+    final tags = (_selected.toList()..sort()).join(', ');
+    // What was typed, not the lowered form matching runs on: quoting someone's
+    // search back at them in a case they did not use reads as a transcription
+    // error in the app.
+    final typed = _search.text.trim();
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              switch ((_query.isNotEmpty, _selected.isNotEmpty)) {
+                (true, true) =>
+                  'Nothing matching "$typed" carries '
+                      '${_matchAll ? 'all of' : 'any of'} $tags.',
+                (true, false) => 'Nothing matches "$typed".',
+                _ =>
+                  'Nothing carries ${_matchAll ? 'all of' : 'any of'} $tags.',
+              },
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Still saved: $held.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 16),
+            TextButton.icon(
+              onPressed: _clearFilters,
+              icon: const Icon(Icons.filter_alt_off),
+              label: const Text('Show everything'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -261,47 +348,126 @@ class _WaypointsPageState extends State<WaypointsPage> {
       child: Text(
         rows > shown.length
             ? '$counted · $rows rows below, because an item appears under '
-                  '${_filtered ? 'each of the tags you picked' : 'each of its tags'}'
+                  '${_selected.isNotEmpty ? 'each of the tags you picked' : 'each of its tags'}'
             : counted,
         style: Theme.of(context).textTheme.bodySmall,
       ),
     );
   }
 
+  /// The search field and the tag chips.
+  ///
+  /// The chips used to be one horizontally scrolling row, which put every tag
+  /// past the third off the side of the screen with nothing to say they were
+  /// there. They wrap now, so the only thing off screen is what the more chip
+  /// counts, and the search above them is the other half of the answer: with
+  /// enough tags, typing part of one is faster than reading a wall of them.
   Widget _filterBar() {
     final counts = widget.store.tagCounts;
-    final tags = counts.keys.toList()..sort();
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
+    final all = counts.keys.toList()..sort();
+    // A search narrows the chips as well as the list, because "find the tag I
+    // want to filter on" is most of what the old row made hard. A tag already
+    // picked stays regardless: taking it away would leave a filter in force with
+    // nothing on screen to switch it off.
+    final matching = _query.isEmpty
+        ? all
+        : all
+              .where(
+                (tag) =>
+                    tag.toLowerCase().contains(_query) ||
+                    _selected.contains(tag),
+              )
+              .toList();
+    final overflowing = !_showAllTags && matching.length > _tagChipLimit;
+    // Selected tags are never among the hidden, for the same reason.
+    final shown = overflowing
+        ? [
+            ...matching.take(_tagChipLimit),
+            ...matching.skip(_tagChipLimit).where(_selected.contains),
+          ]
+        : matching;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          FilterChip(
-            label: Text('All ${widget.store.items.length}'),
-            selected: !_filtered,
-            onSelected: (_) => setState(_selected.clear),
-          ),
-          // Shown whether or not it currently changes anything, because a
-          // filter whose rule is invisible until it bites is worse than a chip
-          // that sometimes says something obvious.
-          if (tags.isNotEmpty) ...[
-            const SizedBox(width: 8),
-            ActionChip(
-              avatar: Icon(
-                _matchAll ? Icons.join_inner : Icons.join_left,
-                size: 16,
-              ),
-              label: Text(_matchAll ? 'All of these tags' : 'Any of these tags'),
-              tooltip: _matchAll
-                  ? 'Matching every selected tag. Tap to match any.'
-                  : 'Matching any selected tag. Tap to match all.',
-              onPressed: () => setState(() => _matchAll = !_matchAll),
+          TextField(
+            controller: _search,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              isDense: true,
+              border: const OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.search),
+              // Says what it looks at, so that a hit on a tag or a glyph name is
+              // an answer rather than a surprise, and so the one field it does
+              // not read is discoverable as an absence.
+              hintText: 'Search names, tags and icons',
+              suffixIcon: _query.isEmpty
+                  ? null
+                  : IconButton(
+                      tooltip: 'Clear search',
+                      icon: const Icon(Icons.close),
+                      onPressed: () => setState(() {
+                        _query = '';
+                        _search.clear();
+                      }),
+                    ),
             ),
-          ],
-          for (final tag in tags) ...[
-            const SizedBox(width: 8),
-            _tagChip(tag, counts[tag]!),
-          ],
+            onChanged: (text) =>
+                setState(() => _query = text.trim().toLowerCase()),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilterChip(
+                label: Text('All ${widget.store.items.length}'),
+                selected: !_filtered,
+                // Clears the search too. It is the chip that means "show me
+                // everything", and leaving a search running under it would make
+                // it lie.
+                onSelected: (_) => _clearFilters(),
+              ),
+              // Shown whether or not it currently changes anything, because a
+              // filter whose rule is invisible until it bites is worse than a
+              // chip that sometimes says something obvious.
+              if (all.isNotEmpty)
+                ActionChip(
+                  avatar: Icon(
+                    _matchAll ? Icons.join_inner : Icons.join_left,
+                    size: 16,
+                  ),
+                  label: Text(
+                    _matchAll ? 'All of these tags' : 'Any of these tags',
+                  ),
+                  tooltip: _matchAll
+                      ? 'Matching every selected tag. Tap to match any.'
+                      : 'Matching any selected tag. Tap to match all.',
+                  onPressed: () => setState(() => _matchAll = !_matchAll),
+                ),
+              for (final tag in shown) _tagChip(tag, counts[tag]!),
+              if (overflowing)
+                ActionChip(
+                  avatar: const Icon(Icons.more_horiz, size: 16),
+                  label: Text('${matching.length - _tagChipLimit} more'),
+                  onPressed: () => setState(() => _showAllTags = true),
+                )
+              else if (_showAllTags && matching.length > _tagChipLimit)
+                ActionChip(
+                  avatar: const Icon(Icons.expand_less, size: 16),
+                  label: const Text('Fewer'),
+                  onPressed: () => setState(() => _showAllTags = false),
+                ),
+              if (_query.isNotEmpty && matching.isEmpty && all.isNotEmpty)
+                // Otherwise a search matching only names reads as though the
+                // tags had gone missing.
+                Chip(
+                  avatar: const Icon(Icons.label_off_outlined, size: 16),
+                  label: const Text('No tag matches this search'),
+                ),
+            ],
+          ),
         ],
       ),
     );

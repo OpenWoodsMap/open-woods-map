@@ -1,0 +1,305 @@
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:maplibre_gl/maplibre_gl.dart';
+import 'package:open_woods_map/settings/visibility_settings.dart';
+import 'package:open_woods_map/waypoints/waypoint_icon.dart';
+import 'package:open_woods_map/waypoints/waypoint_store.dart';
+import 'package:open_woods_map/waypoints/waypoints_page.dart';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+import 'package:plugin_platform_interface/plugin_platform_interface.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class _Documents extends PathProviderPlatform with MockPlatformInterfaceMixin {
+  _Documents(this.root);
+
+  final String root;
+
+  @override
+  Future<String?> getApplicationDocumentsPath() async => root;
+}
+
+Waypoint _point(
+  String id,
+  String name, {
+  WaypointIcon icon = WaypointIcon.pin,
+  List<String> tags = const [],
+}) => Waypoint(
+  id: id,
+  name: name,
+  latitude: 45.5,
+  longitude: -77.5,
+  notes: '',
+  createdAt: DateTime.utc(2026, 9, 10),
+  icon: icon,
+  tags: tags,
+);
+
+void main() {
+  late Directory root;
+
+  setUp(() {
+    root = Directory.systemTemp.createTempSync('owm-waypoints-search');
+    PathProviderPlatform.instance = _Documents(root.path);
+    SharedPreferences.setMockInitialValues({});
+  });
+
+  tearDown(() {
+    try {
+      root.deleteSync(recursive: true);
+    } on FileSystemException {
+      // Left for the OS to reap with the rest of the temp directory.
+    }
+  });
+
+  /// See waypoints_page_test.dart: the store reads a real file and the loading
+  /// spinner never settles, so this pumps in real time rather than settling.
+  Future<void> settle(WidgetTester tester) async {
+    for (var i = 0; i < 8; i++) {
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 25));
+      });
+      await tester.pump(const Duration(milliseconds: 120));
+    }
+  }
+
+  Future<void> pumpPage(WidgetTester tester, List<Waypoint> items) async {
+    tester.view.physicalSize = const Size(1200, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final store = WaypointStore();
+    await tester.runAsync(() async {
+      await store.load();
+      await store.replaceAll(items);
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: WaypointsPage(
+          store: store,
+          suggestedLocation: const LatLng(45, -77),
+          visibility: VisibilitySettings(),
+        ),
+      ),
+    );
+    await settle(tester);
+  }
+
+  Future<void> search(WidgetTester tester, String text) async {
+    await tester.enterText(find.byType(TextField), text);
+    await settle(tester);
+  }
+
+  // The report: finding anything meant side-scrolling a single row of tag chips,
+  // and a name could not be searched for at all.
+  group('searching', () {
+    testWidgets('matches a name', (tester) async {
+      await pumpPage(tester, [
+        _point('1', 'Bonnechere stand'),
+        _point('2', 'Gariepy creek'),
+      ]);
+
+      await search(tester, 'bonn');
+
+      expect(find.text('Bonnechere stand'), findsOneWidget);
+      expect(find.text('Gariepy creek'), findsNothing);
+    });
+
+    testWidgets('matches a tag on an item whose name does not', (tester) async {
+      await pumpPage(tester, [
+        _point('1', 'Bonnechere stand', tags: ['grouse']),
+        _point('2', 'Gariepy creek'),
+      ]);
+
+      await search(tester, 'grouse');
+
+      expect(find.text('Bonnechere stand'), findsOneWidget);
+      expect(find.text('Gariepy creek'), findsNothing);
+    });
+
+    // The icon picker stopped printing names beside the glyphs, so the name has
+    // to be findable somewhere. This is where.
+    testWidgets('matches the name of the glyph', (tester) async {
+      await pumpPage(tester, [
+        _point('1', 'Bonnechere stand', icon: WaypointIcon.stand),
+        _point('2', 'Gariepy creek', icon: WaypointIcon.water),
+      ]);
+
+      await search(tester, 'tree stand');
+
+      expect(find.text('Bonnechere stand'), findsOneWidget);
+      expect(find.text('Gariepy creek'), findsNothing);
+    });
+
+    // The bug this design nearly shipped with: sections were keyed off "is
+    // anything filtering" rather than "are tags picked", so a search on its own
+    // dropped every tag section and showed the untagged group alone.
+    testWidgets('still sections by the tags the results carry', (tester) async {
+      await pumpPage(tester, [
+        _point('1', 'Bonnechere stand', tags: ['ridge']),
+        _point('2', 'Gariepy creek', tags: ['creek']),
+      ]);
+
+      await search(tester, 'bonn');
+
+      expect(find.text('ridge · 1'), findsOneWidget);
+      expect(find.text('creek · 1'), findsNothing);
+    });
+  });
+
+  // "A search bar to help find the tag to filter on" was the ask, so the search
+  // narrows the chips as well as the list.
+  group('the search narrows the tag chips', () {
+    testWidgets('to the tags it matches', (tester) async {
+      await pumpPage(tester, [
+        _point('1', 'North stand', tags: ['ridge']),
+        _point('2', 'South stand', tags: ['creek']),
+      ]);
+      expect(find.text('ridge 1'), findsOneWidget);
+      expect(find.text('creek 1'), findsOneWidget);
+
+      await search(tester, 'rid');
+
+      expect(find.text('ridge 1'), findsOneWidget);
+      expect(find.text('creek 1'), findsNothing);
+    });
+
+    // A filter in force with nothing on screen to switch it off is the failure
+    // this page can least afford, because the result looks like missing data.
+    testWidgets('but never hides a tag being filtered on', (tester) async {
+      await pumpPage(tester, [
+        _point('1', 'North stand', tags: ['ridge']),
+        _point('2', 'Gariepy creek', tags: ['creek']),
+      ]);
+
+      await tester.tap(find.text('creek 1'));
+      await settle(tester);
+      await search(tester, 'rid');
+
+      expect(find.text('creek 1'), findsOneWidget);
+    });
+
+    testWidgets('and says so when no tag matches', (tester) async {
+      await pumpPage(tester, [
+        _point('1', 'Bonnechere stand', tags: ['ridge']),
+      ]);
+
+      await search(tester, 'bonn');
+
+      expect(find.text('No tag matches this search'), findsOneWidget);
+    });
+  });
+
+  group('more tags than fit', () {
+    List<Waypoint> manyTags() => [
+      for (var i = 0; i < 8; i++)
+        _point('$i', 'Stand $i', tags: ['tag${i + 1}']),
+    ];
+
+    testWidgets('the rest go behind one chip', (tester) async {
+      await pumpPage(tester, manyTags());
+
+      expect(find.text('tag1 1'), findsOneWidget);
+      expect(find.text('tag6 1'), findsOneWidget);
+      expect(find.text('tag7 1'), findsNothing);
+      expect(find.text('2 more'), findsOneWidget);
+    });
+
+    testWidgets('tapping it shows them, and Fewer puts them back', (
+      tester,
+    ) async {
+      await pumpPage(tester, manyTags());
+
+      await tester.tap(find.text('2 more'));
+      await settle(tester);
+      expect(find.text('tag8 1'), findsOneWidget);
+
+      await tester.tap(find.text('Fewer'));
+      await settle(tester);
+      expect(find.text('tag8 1'), findsNothing);
+    });
+
+    testWidgets('a tag being filtered on is shown even past the cap', (
+      tester,
+    ) async {
+      await pumpPage(tester, manyTags());
+
+      await tester.tap(find.text('2 more'));
+      await settle(tester);
+      await tester.tap(find.text('tag8 1'));
+      await settle(tester);
+      await tester.tap(find.text('Fewer'));
+      await settle(tester);
+
+      expect(find.text('tag8 1'), findsOneWidget);
+    });
+  });
+
+  // The one screen where an empty list can read as lost data.
+  group('when nothing matches', () {
+    testWidgets('it names the search and what is still saved', (tester) async {
+      await pumpPage(tester, [
+        _point('1', 'Bonnechere stand'),
+        _point('2', 'Gariepy creek'),
+      ]);
+
+      await search(tester, 'Moose');
+
+      // Quoted as typed rather than in the lowered form matching runs on.
+      expect(find.text('Nothing matches "Moose".'), findsOneWidget);
+      expect(find.text('Still saved: 2 waypoints.'), findsOneWidget);
+    });
+
+    testWidgets('naming both when a tag is picked too', (tester) async {
+      await pumpPage(tester, [
+        _point('1', 'Bonnechere stand', tags: ['ridge']),
+      ]);
+
+      await tester.tap(find.text('ridge 1'));
+      await settle(tester);
+      await search(tester, 'Moose');
+
+      expect(
+        find.text('Nothing matching "Moose" carries any of ridge.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('Show everything clears the search and the tags', (
+      tester,
+    ) async {
+      await pumpPage(tester, [
+        _point('1', 'Bonnechere stand', tags: ['ridge']),
+      ]);
+
+      await tester.tap(find.text('ridge 1'));
+      await settle(tester);
+      await search(tester, 'Moose');
+      await tester.tap(find.text('Show everything'));
+      await settle(tester);
+
+      expect(find.text('Bonnechere stand'), findsOneWidget);
+      expect(find.text('ridge 1'), findsOneWidget);
+    });
+  });
+
+  // The chip means "show me everything", so leaving a search running under it
+  // would make it lie.
+  testWidgets('All clears the search as well', (tester) async {
+    await pumpPage(tester, [
+      _point('1', 'Bonnechere stand'),
+      _point('2', 'Gariepy creek'),
+    ]);
+
+    await search(tester, 'bonn');
+    expect(find.text('Gariepy creek'), findsNothing);
+
+    await tester.tap(find.text('All 2'));
+    await settle(tester);
+
+    expect(find.text('Gariepy creek'), findsOneWidget);
+    expect(tester.widget<TextField>(find.byType(TextField)).controller?.text,
+        isEmpty);
+  });
+}

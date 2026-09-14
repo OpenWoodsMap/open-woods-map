@@ -105,10 +105,10 @@ void main() {
   }) async {
     final vis = visibility ?? VisibilitySettings();
     final popped = <WaypointsRequest?>[];
-    // The filter chips scroll sideways and a grouped list repeats a waypoint
-    // under each of its tags, so the default 800x600 surface leaves chips and
-    // rows out of reach of a tap. Size the surface to the page rather than
-    // scrolling to something in every test.
+    // The filter chips wrap and a grouped list repeats a waypoint under each of
+    // its tags, so the default 800x600 surface leaves chips and rows out of
+    // reach of a tap. Size the surface to the page rather than scrolling to
+    // something in every test.
     tester.view.physicalSize = const Size(1200, 2400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -796,7 +796,7 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Delete them'));
       await settle(tester);
 
-      expect(find.text('Nothing matches this filter.'), findsNothing);
+      expect(find.textContaining('Nothing carries'), findsNothing);
       expect(find.text('North stand'), findsNWidgets(2));
     });
 
