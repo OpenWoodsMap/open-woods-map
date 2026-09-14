@@ -6,6 +6,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import '../data/models.dart';
 import '../data/province_loader.dart';
 import '../map/basemap.dart';
+import '../ui/messages.dart';
 import 'area_picker_page.dart';
 import 'basemap_area_store.dart';
 import 'offline_pack_store.dart';
@@ -742,9 +743,5 @@ class _OfflinePageState extends State<OfflinePage> {
     if (mounted) _showMessage('Pack operation failed: $error');
   }
 
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
-  }
+  void _showMessage(String message) => showMessage(context, message);
 }

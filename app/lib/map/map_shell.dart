@@ -23,6 +23,7 @@ import '../tracks/track_follow.dart';
 import '../tracks/track_layers.dart';
 import '../tracks/track_math.dart';
 import '../tracks/track_style.dart';
+import '../ui/messages.dart';
 import '../waypoints/waypoint_card.dart';
 import '../waypoints/waypoint_icon.dart';
 import '../waypoints/waypoint_editor.dart';
@@ -1279,9 +1280,7 @@ class _MapShellState extends State<MapShell> {
 
   void _toast(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    showMessage(context, message);
   }
 
   Future<void> _attachLayers() async {
@@ -1803,15 +1802,14 @@ class _MapShellState extends State<MapShell> {
     if (!mounted) return;
     final province = _selectedProvince;
     if (province != null && province.isPreview) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          duration: const Duration(seconds: 6),
-          content: Text('${province.name} data is a preview.'),
-          action: SnackBarAction(
-            label: 'DETAILS',
-            onPressed: _showProvinceStatus,
-          ),
-        ),
+      showMessage(
+        context,
+        '${province.name} data is a preview.',
+        // Longer than the default: this one is a caveat about the data rather
+        // than a receipt for something the user just did.
+        duration: const Duration(seconds: 6),
+        actionLabel: 'DETAILS',
+        onAction: _showProvinceStatus,
       );
     }
   }
@@ -2053,18 +2051,13 @@ class _MapShellState extends State<MapShell> {
     await _moveCamera(map, target, _waypointRevealZoom);
     await _setIdentifyPin(target);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          found.placeName ??
-              '${found.latitude.toStringAsFixed(6)}, '
-                  '${found.longitude.toStringAsFixed(6)}',
-        ),
-        action: SnackBarAction(
-          label: 'Land info',
-          onPressed: () => _identifyAt(target),
-        ),
-      ),
+    showMessage(
+      context,
+      found.placeName ??
+          '${found.latitude.toStringAsFixed(6)}, '
+              '${found.longitude.toStringAsFixed(6)}',
+      actionLabel: 'Land info',
+      onAction: () => _identifyAt(target),
     );
   }
 
@@ -2185,9 +2178,7 @@ class _MapShellState extends State<MapShell> {
     await _waypoints.add(saved);
     await _syncWaypointSource();
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Saved ${saved.name}.')),
-    );
+    showMessage(context, 'Saved ${saved.name}.');
   }
 
   /// Puts a saved waypoint or track on screen after the list hands one back.

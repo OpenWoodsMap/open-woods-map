@@ -3,8 +3,10 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 
 import '../tracks/track_math.dart';
 import '../settings/visibility_settings.dart';
+import '../ui/messages.dart';
 import 'import_export.dart';
 import 'tag_style.dart';
+import 'undo.dart';
 import 'waypoint_colour.dart';
 import 'waypoint_editor.dart';
 import 'waypoint_icon.dart';
@@ -569,21 +571,16 @@ class _WaypointsPageState extends State<WaypointsPage> {
     final label = tags.length == 1
         ? '#${tags.first}'
         : '${tags.length} tags';
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Hidden on the map because $label '
-          '${tags.length == 1 ? "is" : "are"} hidden.',
-        ),
-        action: SnackBarAction(
-          label: tags.length == 1 ? 'UNHIDE TAG' : 'UNHIDE TAGS',
-          onPressed: () async {
-            for (final tag in tags) {
-              await widget.visibility.setTagHidden(tag, hidden: false);
-            }
-          },
-        ),
-      ),
+    showMessage(
+      context,
+      'Hidden on the map because $label '
+      '${tags.length == 1 ? "is" : "are"} hidden.',
+      actionLabel: tags.length == 1 ? 'UNHIDE TAG' : 'UNHIDE TAGS',
+      onAction: () async {
+        for (final tag in tags) {
+          await widget.visibility.setTagHidden(tag, hidden: false);
+        }
+      },
     );
   }
 
@@ -646,25 +643,25 @@ class _WaypointsPageState extends State<WaypointsPage> {
   /// Deletes with an undo, because the button sits beside a tappable row and
   /// there is nowhere else a waypoint can be recovered from once it is gone.
   Future<void> _delete(Waypoint waypoint) async {
-    final index = widget.store.items.indexWhere(
-      (item) => item.id == waypoint.id,
-    );
+    // The order things were in, not the state to go back to: see undo.dart.
+    final before = widget.store.items.toList();
     await widget.store.delete(waypoint.id);
     if (!mounted) return;
     setState(_pruneFilter);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Deleted ${waypoint.name}.'),
-        action: SnackBarAction(
-          label: 'UNDO',
-          onPressed: () async {
-            final restored = [...widget.store.items];
-            restored.insert(index.clamp(0, restored.length), waypoint);
-            await widget.store.replaceAll(restored);
-            if (mounted) setState(() {});
-          },
-        ),
-      ),
+    showMessage(
+      context,
+      'Deleted ${waypoint.name}.',
+      actionLabel: 'UNDO',
+      onAction: () async {
+        await widget.store.replaceAll(
+          restoreDeleted(
+            current: widget.store.items,
+            before: before,
+            removed: [waypoint],
+          ),
+        );
+        if (mounted) setState(() {});
+      },
     );
   }
 
@@ -706,26 +703,28 @@ class _WaypointsPageState extends State<WaypointsPage> {
       action: 'Remove the tag',
     );
     if (confirmed != true) return;
-    // The whole list, so undo restores the tags in the order they were in
-    // rather than appending this one at the end of each item.
-    final before = widget.store.items.toList();
+    // Where the tag sat in each item, so undo puts it back in place rather than
+    // appending it, without reverting anything else about those items.
+    final positions = {
+      for (final item in section) item.id: item.tags.indexOf(tag),
+    };
     await widget.store.removeTagFrom(tag, ids);
     if (!mounted) return;
     setState(_pruneFilter);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Removed "$tag" from ${describeItems(section)}. '
-          'Nothing was deleted.',
-        ),
-        action: SnackBarAction(
-          label: 'UNDO',
-          onPressed: () async {
-            await widget.store.replaceAll(before);
-            if (mounted) setState(() {});
-          },
-        ),
-      ),
+    showMessage(
+      context,
+      'Removed "$tag" from ${describeItems(section)}. Nothing was deleted.',
+      actionLabel: 'UNDO',
+      onAction: () async {
+        await widget.store.replaceAll(
+          restoreTag(
+            current: widget.store.items,
+            tag: tag,
+            positions: positions,
+          ),
+        );
+        if (mounted) setState(() {});
+      },
     );
   }
 
@@ -746,25 +745,27 @@ class _WaypointsPageState extends State<WaypointsPage> {
       action: 'Delete them',
     );
     if (confirmed != true) return;
-    // The whole list, so undo restores the original order rather than appending
-    // the deleted ones at the end.
+    // The order things were in, not the state to go back to: see undo.dart.
     final before = widget.store.items.toList();
     final removed = await widget.store.deleteWhere(
       (item) => ids.contains(item.id),
     );
     if (!mounted) return;
     setState(_pruneFilter);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Deleted ${describeItems(removed)}.'),
-        action: SnackBarAction(
-          label: 'UNDO',
-          onPressed: () async {
-            await widget.store.replaceAll(before);
-            if (mounted) setState(() {});
-          },
-        ),
-      ),
+    showMessage(
+      context,
+      'Deleted ${describeItems(removed)}.',
+      actionLabel: 'UNDO',
+      onAction: () async {
+        await widget.store.replaceAll(
+          restoreDeleted(
+            current: widget.store.items,
+            before: before,
+            removed: removed,
+          ),
+        );
+        if (mounted) setState(() {});
+      },
     );
   }
 
@@ -840,21 +841,15 @@ class _WaypointsPageState extends State<WaypointsPage> {
       if (!mounted) return;
       setState(() {});
       final skipped = imported.length - fresh.length;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            skipped == 0
-                ? 'Imported ${describeItems(fresh)}.'
-                : 'Imported ${describeItems(fresh)}, skipped $skipped already '
-                      'here.',
-          ),
-        ),
+      showMessage(
+        context,
+        skipped == 0
+            ? 'Imported ${describeItems(fresh)}.'
+            : 'Imported ${describeItems(fresh)}, skipped $skipped already here.',
       );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Import failed: $error')));
+      showMessage(context, 'Import failed: $error');
     }
   }
 }

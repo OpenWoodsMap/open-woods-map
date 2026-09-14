@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../data/models.dart';
 import '../data/province_loader.dart';
 import '../data/seasons.dart';
+import '../ui/messages.dart';
 import 'land_info.dart';
 import 'policy_markdown.dart';
 import 'seasons_tab.dart';
@@ -619,11 +620,10 @@ class _FeatureReport extends StatelessWidget {
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: coordinates));
               if (!context.mounted) return;
-              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                const SnackBar(
-                  content: Text('Coordinates copied'),
-                  behavior: SnackBarBehavior.floating,
-                ),
+              showMessage(
+                context,
+                'Coordinates copied',
+                behavior: SnackBarBehavior.floating,
               );
             },
           ),
@@ -644,19 +644,17 @@ class _FeatureReport extends StatelessWidget {
   /// Opens the province's live policy report in a browser. Needs a connection,
   /// so failure is reported rather than left as a dead tap.
   Future<void> _openOfficialReport(BuildContext context, Uri url) async {
-    final messenger = ScaffoldMessenger.maybeOf(context);
     var launched = false;
     try {
       launched = await launchUrl(url, mode: LaunchMode.externalApplication);
     } catch (_) {
       launched = false;
     }
-    if (launched) return;
-    messenger?.showSnackBar(
-      SnackBar(
-        content: Text('Could not open the report. $url'),
-        behavior: SnackBarBehavior.floating,
-      ),
+    if (launched || !context.mounted) return;
+    showMessage(
+      context,
+      'Could not open the report. $url',
+      behavior: SnackBarBehavior.floating,
     );
   }
 }

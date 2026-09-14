@@ -66,6 +66,7 @@ anything. The ones most often violated by accident:
 | `app/lib/offline/` | Pack download and install, plus offline basemap areas |
 | `app/lib/weather/` | Open-Meteo client and the deer activity heuristic |
 | `app/lib/waypoints/` | Local waypoint storage and import/export |
+| `app/lib/ui/` | Shared UI helpers used across features, such as `showMessage` |
 | `tools/gis/` | Python fetch and build scripts, one per source |
 | `tools/devtest/` | Emulator harness for on-device sanity checks (`owm.ps1`) |
 | `data/{cc}/` | Generated per-province manifest, overlays, policies, seasons |
