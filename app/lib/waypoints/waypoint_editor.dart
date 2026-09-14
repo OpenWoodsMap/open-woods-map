@@ -321,21 +321,33 @@ class _WaypointEditorState extends State<WaypointEditor> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
+                  // FilterChip rather than InputChip and ActionChip, which is
+                  // what these were: those two differ only by a small leading
+                  // glyph, so on a phone the tags on this waypoint looked much
+                  // like the ones merely available, and people saved the wrong
+                  // ones. A filled container and a checkmark is Material's own
+                  // way of saying selected, and it is what the waypoints list
+                  // already uses for its tag filter. The icon chips above skip
+                  // the checkmark because it scrims the glyph they exist to
+                  // show; a tag has no glyph, so here it is free.
                   for (final tag in _tags)
-                    InputChip(
+                    FilterChip(
+                      selected: true,
                       label: Text(tag),
-                      onDeleted: () => setState(
+                      onSelected: (_) => setState(
                         () => _tags = [..._tags]..remove(tag),
                       ),
                     ),
                   for (final tag in unusedKnownTags)
-                    ActionChip(
-                      avatar: const Icon(Icons.add, size: 16),
+                    FilterChip(
+                      selected: false,
                       label: Text(tag),
-                      onPressed: () => setState(
+                      onSelected: (_) => setState(
                         () => _tags = normaliseTags([..._tags, tag]),
                       ),
                     ),
+                  // Still an ActionChip: this makes a tag rather than toggling
+                  // one, and adopting an example below is the same kind of act.
                   ActionChip(
                     avatar: const Icon(Icons.label_outline, size: 16),
                     label: const Text('New tag'),
