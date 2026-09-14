@@ -251,16 +251,23 @@ function Cmd-Install {
     $abis = ((Invoke-Adb @('shell', 'getprop', 'ro.product.cpu.abilist') |
         Out-String).Trim() -split ',') | Where-Object { $_ }
     if (-not $abis) { $abis = @('x86_64') }
-    # In the device's own order of preference, and that order beats recency. A
-    # split build writes every ABI within the same minute, so sorting by write
-    # time on an arm64 phone lands on armeabi-v7a — the 32-bit split, which the
-    # phone will refuse alongside an existing 64-bit install.
-    $names = @($abis | ForEach-Object { "app-$($_.Trim())-release.apk" }) +
-        'app-release.apk'
-    $apk = $names |
-        ForEach-Object { Join-Path $Repo "app\build\app\outputs\flutter-apk\$_" } |
+    # Only two files are ever candidates: the split for the ABI this device likes
+    # best, and the fat APK. Every runnable split cannot compete on recency,
+    # because a split build writes them all within the same minute and an arm64
+    # phone lists armeabi-v7a as runnable too — sorting that set by write time
+    # lands on the 32-bit split, which the phone refuses alongside an existing
+    # 64-bit install. Narrowing to the best ABI first leaves recency to decide the
+    # question it is good at: which of a split build and a fat build is the one
+    # you just ran.
+    $directory = Join-Path $Repo 'app\build\app\outputs\flutter-apk'
+    $best = @($abis | ForEach-Object { "app-$($_.Trim())-release.apk" }) |
+        ForEach-Object { Join-Path $directory $_ } |
         Where-Object { Test-Path $_ } |
+        Select-Object -First 1
+    $apk = @($best, (Join-Path $directory 'app-release.apk')) |
+        Where-Object { $_ -and (Test-Path $_) } |
         Get-Item |
+        Sort-Object LastWriteTime -Descending |
         Select-Object -First 1
     if (-not $apk) {
         throw "No APK for this device ($($abis -join ', ')). Build one:`n" +
