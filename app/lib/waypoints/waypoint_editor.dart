@@ -69,6 +69,11 @@ class _WaypointEditorState extends State<WaypointEditor> {
   /// user is expected to work through, which is the opposite of what they are.
   var _showSuggestions = false;
 
+  /// Also collapsed to start with, and for a stronger version of that reason:
+  /// the glyph grid is the tallest thing in this sheet, and most edits do not
+  /// change the icon at all.
+  var _showIcons = false;
+
   @override
   void initState() {
     super.initState();
@@ -106,9 +111,10 @@ class _WaypointEditorState extends State<WaypointEditor> {
     );
   }
 
-  /// What the line will actually be drawn in, which is not [_colour]: null there
-  /// means the glyph's own colour, and a preview has to resolve that to see it.
-  Color get _lineColour => _colour?.value ?? _icon.colour;
+  /// What this will actually be drawn in, which is not [_colour]: null there
+  /// means the glyph's own colour, and anything claiming to preview it has to
+  /// resolve that to be telling the truth.
+  Color get _drawnColour => _colour?.value ?? _icon.colour;
 
   Future<void> _addTag() async {
     final controller = TextEditingController();
@@ -161,7 +167,21 @@ class _WaypointEditorState extends State<WaypointEditor> {
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.9,
       ),
-      child: SingleChildScrollView(
+      child: _SheetBody(
+        footer: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            TextButton(
+              onPressed: () => Navigator.maybePop(context),
+              child: const Text('Cancel'),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(
+              onPressed: _save,
+              child: Text(widget.isNew ? 'Save' : 'Done'),
+            ),
+          ],
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -197,45 +217,57 @@ class _WaypointEditorState extends State<WaypointEditor> {
               ),
             ),
             _label(theme, 'Icon'),
+            // Collapsed to start with, for the same reason the tag examples
+            // below are. The labelled chips sat between the name field and
+            // everything else, so colour, tags, notes and Save were all a
+            // scroll away on a phone. A wall of names also reads as a set of
+            // categories to file the waypoint under, when all it decides is how
+            // this one is drawn.
+            ListTile(
+              // The colour it will really be drawn in rather than the glyph's
+              // own, because this row is claiming to show how it looks.
+              leading: Icon(_icon.icon, color: _drawnColour),
+              title: Text(_icon.label),
+              subtitle: const Text('How this is drawn on the map.'),
+              trailing: Icon(
+                _showIcons ? Icons.expand_less : Icons.expand_more,
+              ),
+              onTap: () => setState(() => _showIcons = !_showIcons),
+            ),
             // Sectioned, because thirty pictograms in one wall is unreadable.
             // The sections are the picker's only job: nothing downstream reads
             // a glyph's group, and a fishing glyph on a stand is a legitimate
             // choice rather than a mistake to be prevented.
-            for (final entry in WaypointIcon.byGroup.entries) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-                child: Text(
-                  entry.key.label,
-                  style: theme.textTheme.labelMedium,
+            if (_showIcons)
+              for (final entry in WaypointIcon.byGroup.entries) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+                  child: Text(
+                    entry.key.label,
+                    style: theme.textTheme.labelMedium,
+                  ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final icon in entry.value)
-                      ChoiceChip(
-                        selected: icon == _icon,
-                        // Material draws the selected checkmark inside the
-                        // avatar behind a scrim, which turns the glyph into an
-                        // unreadable grey disc — and the glyph is the only
-                        // reason this chip has an avatar. The filled container
-                        // says "selected" on its own.
-                        showCheckmark: false,
-                        // In the glyph's own colour, because that is what the
-                        // waypoint will be drawn in unless a colour is chosen
-                        // below, and a picker that hid that would be asking
-                        // the user to pick a colour blind.
-                        avatar: Icon(icon.icon, size: 18, color: icon.colour),
-                        label: Text(icon.label),
-                        onSelected: (_) => setState(() => _icon = icon),
-                      ),
-                  ],
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final icon in entry.value)
+                        _IconChoice(
+                          icon: icon,
+                          selected: icon == _icon,
+                          // Picking deliberately leaves the grid open. The
+                          // names are not on the glyphs, so the row above is how
+                          // you read back what you just chose, and closing on
+                          // the first tap would take the grid away before you
+                          // could compare it with the one beside it.
+                          onTap: () => setState(() => _icon = icon),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
             _label(theme, 'Colour'),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -270,7 +302,7 @@ class _WaypointEditorState extends State<WaypointEditor> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: TrackPreview(
-                  colour: _lineColour,
+                  colour: _drawnColour,
                   stroke: _stroke,
                   marker: _marker,
                 ),
@@ -409,23 +441,7 @@ class _WaypointEditorState extends State<WaypointEditor> {
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.maybePop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _save,
-                    child: Text(widget.isNew ? 'Save' : 'Done'),
-                  ),
-                ],
-              ),
-            ),
+            const SizedBox(height: 16),
           ],
         ),
       ),
@@ -439,6 +455,91 @@ class _WaypointEditorState extends State<WaypointEditor> {
       style: theme.textTheme.labelSmall?.copyWith(letterSpacing: 0.8),
     ),
   );
+}
+
+/// A sheet whose [child] scrolls and whose [footer] does not.
+///
+/// Save used to be the last widget inside the scrolling area, below Notes, so on
+/// a phone it sat under the fold and saving meant scrolling past every other
+/// control to reach it.
+class _SheetBody extends StatelessWidget {
+  const _SheetBody({required this.footer, required this.child});
+
+  final Widget footer;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      // Flexible rather than Expanded, so a short sheet, such as a waypoint
+      // with the glyph grid closed, still sizes itself to its contents instead
+      // of stretching to the full height the caller allows.
+      Flexible(child: SingleChildScrollView(child: child)),
+      const Divider(height: 1),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: footer,
+      ),
+    ],
+  );
+}
+
+/// One glyph in the icon grid, with no name beside it.
+///
+/// Names made the grid four times taller than it needed to be, and with these
+/// icons in six titled groups the heading and the glyph together are usually
+/// enough to find the one you want. The name is still reachable: the row above
+/// the grid names whatever is selected, and a long press names any of them.
+/// [WaypointIcon.label] stays in the data either way, which is what a search
+/// across icons would match on.
+class _IconChoice extends StatelessWidget {
+  const _IconChoice({
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final WaypointIcon icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: icon.label,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Semantics(
+          label: icon.label,
+          selected: selected,
+          button: true,
+          child: Container(
+            // Still a full-sized touch target: dropping the names was meant to
+            // shorten the grid, not to make it harder to hit with cold hands.
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: selected ? scheme.secondaryContainer : null,
+              border: Border.all(
+                color: selected
+                    ? scheme.onSecondaryContainer
+                    : scheme.outlineVariant,
+                width: selected ? 2 : 1,
+              ),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            // In the glyph's own colour, because that is what the waypoint will
+            // be drawn in unless a colour is chosen below, and a picker that hid
+            // that would be asking the user to pick a colour blind.
+            child: Center(child: Icon(icon.icon, size: 24, color: icon.colour)),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _Swatch extends StatelessWidget {
