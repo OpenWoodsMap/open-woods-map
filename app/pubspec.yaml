@@ -1,7 +1,7 @@
 name: open_woods_map
 description: Offline-first Canadian hunting land map
 publish_to: 'none'
-version: 0.1.5+6
+version: 0.1.6+7
 
 environment:
   sdk: '>=3.7.0 <4.0.0'
@@ -68,8 +68,22 @@ flutter:
     - assets/styles/satellite.json
     - assets/styles/hybrid.json
     - assets/data/provinces.json
-    # Signed distance fields for the waypoint glyphs, generated from Flutter's
-    # bundled Material Icons by tools/icons/build_waypoint_icons.py. Fifteen
-    # small PNGs rather than one per colour, because SDF lets icon-color tint
-    # them at draw time.
+    # Signed distance fields for the waypoint glyphs, rasterised by
+    # tools/icons/build_waypoint_icons.py from Flutter's bundled Material Icons
+    # and from OwmIcons below. One small PNG each rather than one per colour,
+    # because SDF lets icon-color tint them at draw time.
     - assets/waypoint_icons/
+
+  # The glyphs Material Icons has nothing for: game species, animal sign, and
+  # the foraging and access pictures the outdoors needs. Built by
+  # tools/icons/build_owm_icon_font.py from the CC BY 3.0 artwork vendored in
+  # tools/icons/svg, whose authors are credited on the About screen because
+  # attribution is a condition of the licence.
+  #
+  # A font rather than images because WaypointIcon.icon is an IconData that
+  # lists, cards and filter chips all draw, and because the map's sprites are
+  # rasterised from this same file — which is what stops the two drifting apart.
+  fonts:
+    - family: OwmIcons
+      fonts:
+        - asset: assets/fonts/OwmIcons.ttf

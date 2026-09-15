@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
 
+import 'owm_icons.dart';
+
 /// Which part of the picker a glyph sits under.
 ///
 /// Grouping only, never meaning: an angler is free to mark a stand and a hunter
-/// a dock. The sections exist because a flat wall of thirty pictograms is
+/// a dock. The sections exist because a flat wall of fifty pictograms is
 /// unreadable, not because the app has an opinion about who marks what.
+///
+/// Declaration order is the order the picker shows the sections in, which is why
+/// [WaypointIcon.byGroup] walks this enum rather than the icons.
 enum WaypointIconGroup {
   general(label: 'General'),
+  wildlife(label: 'Wildlife and sign'),
   hunting(label: 'Hunting'),
   fishing(label: 'Fishing and water'),
+  land(label: 'Land and water'),
   travel(label: 'Getting there'),
   hazards(label: 'Hazards'),
   lines(label: 'Lines and routes');
@@ -79,12 +86,12 @@ enum WaypointIcon {
     // glance and far enough apart to tell two marks on a lake apart.
     colour: Color(0xFF00796B),
   ),
-  // Material's glyph is a kettle grill with smoke rising, so the label says
-  // grill as well as fire rather than promising a stone ring.
+  // Was Material's kettle grill, which is why the label used to hedge about
+  // grills. This draws a fire ring now, so it can say so.
   firepit(
     id: 'firepit',
-    label: 'Fire or grill',
-    icon: Icons.outdoor_grill,
+    label: 'Fire ring',
+    icon: OwmIcons.firepit,
     garminSym: null,
     // Ember, not hazard orange: a fire ring is a place you are glad to find,
     // and the two should not read as the same warning.
@@ -107,9 +114,9 @@ enum WaypointIcon {
     // meaning.
     colour: Color(0xFF616161),
   ),
-  // A leaf, labelled for what it is used for. Material Icons has no mushroom
-  // and no berry, and the nearest glyphs are a flower and a spa symbol, so one
-  // honest general-purpose pictogram beats two that draw the wrong plant.
+  // A leaf, and now the catch-all rather than the only option: the three below
+  // draw the plants Material Icons had nothing for, so this one is for whatever
+  // they do not cover.
   foraging(
     id: 'foraging',
     label: 'Foraging',
@@ -118,13 +125,143 @@ enum WaypointIcon {
     // Green, alongside food source, because both mark something growing.
     colour: Color(0xFF33691E),
   ),
+  mushroom(
+    id: 'mushroom',
+    label: 'Mushrooms',
+    icon: OwmIcons.mushroom,
+    garminSym: null,
+    colour: Color(0xFF8B4513),
+  ),
+  berries(
+    id: 'berries',
+    label: 'Berries',
+    icon: OwmIcons.berries,
+    garminSym: null,
+    // The one genuinely berry-coloured value in the set, and the only place a
+    // pink this deep is used outside the track glyphs.
+    colour: Color(0xFF880E4F),
+  ),
+  nuts(
+    id: 'nuts',
+    label: 'Nuts or mast',
+    icon: OwmIcons.nuts,
+    garminSym: null,
+    colour: Color(0xFFA0522D),
+  ),
 
+  // Species, for marking what was seen rather than what was done. Material Icons
+  // has no animal but a paw print, so every one of these is drawn from the
+  // vendored artwork.
+  //
+  // There is no moose, elk or caribou glyph in that artwork either, and none
+  // close enough to adapt honestly, so [deer] carries the other cervids and the
+  // tag says which. Same for grouse, turkey and partridge, which land on
+  // [feather]. A rooster relabelled as a grouse would be the app claiming to
+  // know a bird it cannot draw.
+  deer(
+    id: 'deer',
+    label: 'Deer or moose',
+    icon: OwmIcons.deer,
+    garminSym: null,
+    colour: Color(0xFF8D6E63),
+    group: WaypointIconGroup.wildlife,
+  ),
+  bear(
+    id: 'bear',
+    label: 'Bear',
+    icon: OwmIcons.bear,
+    garminSym: null,
+    colour: Color(0xFF5D4037),
+    group: WaypointIconGroup.wildlife,
+  ),
+  boar(
+    id: 'boar',
+    label: 'Boar',
+    icon: OwmIcons.boar,
+    garminSym: null,
+    colour: Color(0xFF795548),
+    group: WaypointIconGroup.wildlife,
+  ),
+  wolf(
+    id: 'wolf',
+    label: 'Wolf or coyote',
+    icon: OwmIcons.wolf,
+    garminSym: null,
+    colour: Color(0xFF78909C),
+    group: WaypointIconGroup.wildlife,
+  ),
+  rabbit(
+    id: 'rabbit',
+    label: 'Rabbit or hare',
+    icon: OwmIcons.rabbit,
+    garminSym: null,
+    colour: Color(0xFFA1887F),
+    group: WaypointIconGroup.wildlife,
+  ),
+  squirrel(
+    id: 'squirrel',
+    label: 'Squirrel',
+    icon: OwmIcons.squirrel,
+    garminSym: null,
+    colour: Color(0xFFD84315),
+    group: WaypointIconGroup.wildlife,
+  ),
+  beaver(
+    id: 'beaver',
+    label: 'Beaver',
+    icon: OwmIcons.beaver,
+    garminSym: null,
+    colour: Color(0xFF7B5E57),
+    group: WaypointIconGroup.wildlife,
+  ),
+  waterfowl(
+    id: 'waterfowl',
+    label: 'Ducks or geese',
+    icon: OwmIcons.waterfowl,
+    garminSym: null,
+    colour: Color(0xFF546E7A),
+    group: WaypointIconGroup.wildlife,
+  ),
+  feather(
+    id: 'feather',
+    label: 'Game birds',
+    icon: OwmIcons.feather,
+    garminSym: null,
+    colour: Color(0xFF90A4AE),
+    group: WaypointIconGroup.wildlife,
+  ),
+  // Cloven prints, which is the one thing that tells it apart from [sign]: that
+  // one is Material's paw and means sign of any kind.
+  tracks(
+    id: 'tracks',
+    label: 'Hoof tracks',
+    icon: OwmIcons.tracks,
+    garminSym: null,
+    colour: Color(0xFF5A4632),
+    group: WaypointIconGroup.wildlife,
+  ),
+
+  // A ladder now, which is what a stand looks like from below. Material's
+  // nearest was an office chair. The label stays the generic term: it is the
+  // word hunters search for, it is what `garminSym` says, and it is the tag an
+  // old waypoint migrated to, so all three agreeing is worth more than naming
+  // the picture.
   stand(
     id: 'stand',
     label: 'Tree stand',
-    icon: Icons.chair_alt,
+    icon: OwmIcons.stand,
     garminSym: 'Tree Stand',
     colour: Color(0xFF6A4C1E),
+    group: WaypointIconGroup.hunting,
+  ),
+  towerStand(
+    id: 'tower-stand',
+    label: 'Tower or box stand',
+    icon: OwmIcons.towerStand,
+    garminSym: null,
+    // Beside the ladder stand, because they are the same errand at a glance and
+    // a hunter with both wants to tell them apart without reading.
+    colour: Color(0xFF7A5C2E),
     group: WaypointIconGroup.hunting,
   ),
   blind(
@@ -133,6 +270,16 @@ enum WaypointIcon {
     icon: Icons.night_shelter,
     garminSym: 'Blind',
     colour: Color(0xFF4E342E),
+    group: WaypointIconGroup.hunting,
+  ),
+  // Where you sit and look, not where you sit and wait, which is why it is its
+  // own mark rather than a stand.
+  glassing(
+    id: 'glassing',
+    label: 'Glassing spot',
+    icon: OwmIcons.glassing,
+    garminSym: null,
+    colour: Color(0xFF607D8B),
     group: WaypointIconGroup.hunting,
   ),
   camera(
@@ -160,10 +307,12 @@ enum WaypointIcon {
     colour: Color(0xFF8E0000),
     group: WaypointIconGroup.hunting,
   ),
+  // A skull rather than the plain flag Material could offer, which said nothing
+  // about what was being marked.
   harvest(
     id: 'harvest',
     label: 'Harvest',
-    icon: Icons.flag,
+    icon: OwmIcons.harvest,
     // Garmin has no generic "harvest"; Big Game is the closest real symbol and
     // is what a hunting unit shows for a taken animal.
     garminSym: 'Big Game',
@@ -187,6 +336,16 @@ enum WaypointIcon {
     colour: Color(0xFF00838F),
     group: WaypointIconGroup.fishing,
   ),
+  // A fish landed, where [fishing] is the spot you went to. Two marks because
+  // one is a plan and the other is a result.
+  fish(
+    id: 'fish',
+    label: 'Fish caught',
+    icon: OwmIcons.fish,
+    garminSym: null,
+    colour: Color(0xFF006064),
+    group: WaypointIconGroup.fishing,
+  ),
   dock(
     id: 'dock',
     label: 'Dock or mooring',
@@ -204,6 +363,62 @@ enum WaypointIcon {
     // Beside fishing's cyan, since a launch is usually how the fishing starts.
     colour: Color(0xFF0097A7),
     group: WaypointIconGroup.fishing,
+  ),
+
+  // Features of the ground itself. These describe terrain rather than anything
+  // anyone built or did, which is why they are not under Getting there.
+  forest(
+    id: 'forest',
+    label: 'Timber or cover',
+    icon: OwmIcons.forest,
+    garminSym: null,
+    colour: Color(0xFF1B5E20),
+    group: WaypointIconGroup.land,
+  ),
+  swamp(
+    id: 'swamp',
+    label: 'Swamp or marsh',
+    icon: OwmIcons.swamp,
+    garminSym: null,
+    colour: Color(0xFF6B8E23),
+    group: WaypointIconGroup.land,
+  ),
+  waterfall(
+    id: 'waterfall',
+    label: 'Waterfall or rapids',
+    icon: OwmIcons.waterfall,
+    garminSym: null,
+    colour: Color(0xFF039BE5),
+    group: WaypointIconGroup.land,
+  ),
+  spring(
+    id: 'spring',
+    label: 'Spring or well',
+    icon: OwmIcons.spring,
+    garminSym: null,
+    // Darker than the cyan this started as, which was light enough that the
+    // white glyph inside a pin of it missed the 3:1 a pictogram needs.
+    colour: Color(0xFF00897B),
+    group: WaypointIconGroup.land,
+  ),
+  cave(
+    id: 'cave',
+    label: 'Cave or overhang',
+    icon: OwmIcons.cave,
+    garminSym: null,
+    colour: Color(0xFF424242),
+    group: WaypointIconGroup.land,
+  ),
+  farm(
+    id: 'farm',
+    label: 'Farmland',
+    icon: OwmIcons.farm,
+    garminSym: null,
+    // Ochre rather than the lime it started as, which was too light for a white
+    // glyph to read against, and warmer than portage's olive so that the two
+    // are not one colour with two meanings.
+    colour: Color(0xFFA6761D),
+    group: WaypointIconGroup.land,
   ),
 
   parking(
@@ -240,6 +455,24 @@ enum WaypointIcon {
     // Water's blue, lighter: a ford is water that is in the way rather than
     // water you came for.
     colour: Color(0xFF0288D1),
+    group: WaypointIconGroup.travel,
+  ),
+  bridge(
+    id: 'bridge',
+    label: 'Bridge',
+    icon: OwmIcons.bridge,
+    garminSym: null,
+    colour: Color(0xFF757575),
+    group: WaypointIconGroup.travel,
+  ),
+  // Where access stops, which is a thing worth marking whether or not it is
+  // locked. [boundary] is the fence itself; this is the way through it.
+  gate(
+    id: 'gate',
+    label: 'Gate',
+    icon: OwmIcons.gate,
+    garminSym: null,
+    colour: Color(0xFF263238),
     group: WaypointIconGroup.travel,
   ),
 
@@ -282,6 +515,16 @@ enum WaypointIcon {
     icon: Icons.directions_car,
     garminSym: null,
     colour: Color(0xFF3E2723),
+    group: WaypointIconGroup.lines,
+  ),
+  atvTrail(
+    id: 'atv-trail',
+    label: 'ATV trail',
+    icon: OwmIcons.atvTrail,
+    garminSym: null,
+    // Purple, which the other line glyphs leave empty. Two tracks the same
+    // colour are much harder to tell apart than two pins are.
+    colour: Color(0xFF6A1B9A),
     group: WaypointIconGroup.lines,
   ),
   portage(
@@ -348,12 +591,14 @@ enum WaypointIcon {
 
   /// Every glyph, sectioned for a picker.
   ///
-  /// Declaration order, so the picker reads in the order the enum does and a
-  /// glyph added to a group lands beside the ones it belongs with.
+  /// Sections come in [WaypointIconGroup] declaration order and the glyphs
+  /// within one in this enum's, so a glyph added to a group lands beside the
+  /// ones it belongs with without deciding where its whole section appears.
   static Map<WaypointIconGroup, List<WaypointIcon>> get byGroup {
     final grouped = <WaypointIconGroup, List<WaypointIcon>>{};
-    for (final icon in values) {
-      (grouped[icon.group] ??= []).add(icon);
+    for (final group in WaypointIconGroup.values) {
+      final icons = values.where((icon) => icon.group == group).toList();
+      if (icons.isNotEmpty) grouped[group] = icons;
     }
     return grouped;
   }

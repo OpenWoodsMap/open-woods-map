@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../waypoints/owm_icons.dart';
 import '../waypoints/waypoint_colour.dart';
 import '../waypoints/waypoint_icon.dart';
 import 'display_settings.dart';
@@ -115,6 +116,26 @@ class SettingsPage extends StatelessWidget {
             Text(
               'Either way, a button appears on the map whenever it is turned '
               'away from north, and tapping it puts north back at the top.',
+              style: theme.textTheme.bodySmall?.copyWith(height: 1.35),
+            ),
+            const Divider(height: 32),
+            Text('Credits', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 4),
+            // Not a courtesy. The waypoint artwork for the animals, the
+            // foraging glyphs and several of the terrain marks is CC BY 3.0,
+            // which requires the authors to be credited in the app itself.
+            // The string is generated alongside the font, so an added glyph by
+            // someone new cannot leave them off it.
+            Text(
+              '${OwmIconsCredit.line}, licensed '
+              '${OwmIconsCredit.licence}. Every other glyph is from Material '
+              'Icons, licensed Apache 2.0.',
+              style: theme.textTheme.bodySmall?.copyWith(height: 1.35),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Map data credits are on each area’s Land Info card, beside the '
+              'layer they belong to.',
               style: theme.textTheme.bodySmall?.copyWith(height: 1.35),
             ),
           ],

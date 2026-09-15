@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:open_woods_map/waypoints/owm_icons.dart';
 import 'package:open_woods_map/waypoints/waypoint_icon.dart';
 
 void main() {
@@ -62,6 +63,84 @@ void main() {
     test('no icon shares an image name with another', () {
       final names = WaypointIcon.values.map((icon) => icon.iconImage).toSet();
       expect(names, hasLength(WaypointIcon.values.length));
+    });
+
+    // Two fonts draw these glyphs and their codepoint ranges overlap, so the
+    // number on its own does not say which shape it is. An icon whose family is
+    // wrong resolves to a different picture, or to nothing at all.
+    test('every icon says which font drew it, and it is one we ship', () {
+      final fonts = manifest['fonts'] as Map<String, dynamic>;
+      for (final icon in WaypointIcon.values) {
+        expect(
+          fonts[icon.id],
+          icon.icon.fontFamily,
+          reason:
+              '"${icon.id}" draws from ${icon.icon.fontFamily} but its PNG was '
+              'rasterised from ${fonts[icon.id]}',
+        );
+      }
+      expect(
+        fonts.values.toSet(),
+        {'MaterialIcons', 'OwmIcons'},
+        reason: 'a third font would need bundling in pubspec.yaml',
+      );
+    });
+
+    // The glyphs Material has nothing for are useless if the font they live in
+    // was not rebuilt, and the failure on a device is a blank square rather than
+    // an error.
+    test('the app\'s own font carries every glyph that claims to be in it', () {
+      final sidecar =
+          jsonDecode(
+                File('../tools/icons/owm_icon_font.json').readAsStringSync(),
+              )
+              as Map<String, dynamic>;
+      final glyphs = sidecar['glyphs'] as Map<String, dynamic>;
+      expect(File('assets/fonts/OwmIcons.ttf').existsSync(), isTrue);
+      for (final icon in WaypointIcon.values.where(
+        (icon) => icon.icon.fontFamily == 'OwmIcons',
+      )) {
+        expect(
+          glyphs.containsKey(icon.id),
+          isTrue,
+          reason:
+              '"${icon.id}" names the OwmIcons font but is not in it. Run '
+              'python tools/icons/build_owm_icon_font.py',
+        );
+        expect(
+          (glyphs[icon.id] as Map<String, dynamic>)['codepoint'],
+          icon.icon.codePoint,
+          reason: icon.id,
+        );
+      }
+      // Nothing in the font that no icon draws: a glyph nobody names is weight
+      // in the APK and a picture the picker never offers.
+      expect(
+        glyphs.keys.toSet(),
+        WaypointIcon.values
+            .where((icon) => icon.icon.fontFamily == 'OwmIcons')
+            .map((icon) => icon.id)
+            .toSet(),
+      );
+    });
+
+    // CC BY 3.0 is an attribution licence, so shipping the artwork without the
+    // credit is a licence breach rather than an oversight. The credit the app
+    // shows is generated from the same table as the font; this is what catches
+    // the two being regenerated apart.
+    test('the artwork credit the app shows names every author of it', () {
+      final sources = manifest['sources'] as Map<String, dynamic>;
+      final owm = sources['OwmIcons'] as Map<String, dynamic>;
+      expect(owm['credit'], OwmIconsCredit.line);
+      expect(owm['licence'], OwmIconsCredit.licence);
+      expect(owm['licence_url'], OwmIconsCredit.licenceUrl);
+      for (final author in OwmIconsCredit.authors) {
+        expect(
+          OwmIconsCredit.line,
+          contains(author),
+          reason: '$author is owed credit and the line does not name them',
+        );
+      }
     });
   });
 
@@ -132,23 +211,38 @@ void main() {
       expect(WaypointIcon.camera.garminSym, isNull);
     });
 
-    // Every glyph added since the icon stopped being a category. Garmin may
-    // well have a "Boat Ramp" or a "Geocache", but the display name has to be
-    // confirmed against the table rather than guessed, and an unconfirmed
-    // guess is a wrong icon on someone's device.
-    test('are absent on every glyph whose name has not been confirmed', () {
-      for (final icon in [
-        WaypointIcon.tent,
-        WaypointIcon.firepit,
-        WaypointIcon.cache,
-        WaypointIcon.foraging,
-        WaypointIcon.dock,
-        WaypointIcon.boatLaunch,
-        WaypointIcon.signpost,
-        WaypointIcon.ford,
-      ]) {
-        expect(icon.garminSym, isNull, reason: icon.id);
-      }
+    // Garmin may well have a "Boat Ramp", a "Geocache" or a "Bridge", but the
+    // display name has to be confirmed against the table rather than guessed,
+    // and an unconfirmed guess is a wrong icon on someone's device. So this is
+    // exhaustive rather than a sample: an icon added with a plausible-looking
+    // symbol nobody checked fails here.
+    test('are carried by exactly the glyphs whose names were confirmed', () {
+      const confirmed = {
+        'other',
+        'viewpoint',
+        'camp',
+        'water',
+        'stand',
+        'blind',
+        'sign',
+        'blood',
+        'harvest',
+        'food',
+        'fishing',
+        'parking',
+        'trailhead',
+        'hazard',
+      };
+      expect(
+        {
+          for (final icon in WaypointIcon.values)
+            if (icon.garminSym != null) icon.id,
+        },
+        confirmed,
+        reason:
+            'A glyph gained or lost a Garmin symbol. Confirm the display name '
+            "against GPSBabel's garmin_icon_tables.h before adding one.",
+      );
     });
 
     // GPX's trkType has no `sym` element at all, so there is nothing for one of
@@ -242,6 +336,22 @@ void main() {
       for (final entry in WaypointIcon.byGroup.entries) {
         expect(entry.value, isNotEmpty, reason: entry.key.name);
       }
+    });
+
+    // byGroup leaves an empty group out rather than showing an empty heading, so
+    // a group nothing is filed under would disappear silently. It is a section
+    // of the picker that was declared and never filled.
+    test('every group that exists has something filed under it', () {
+      expect(WaypointIcon.byGroup.keys, WaypointIconGroup.values);
+    });
+
+    // Declaration order, so the sections read in the order the group enum lists
+    // them rather than in whatever order the icons happen to appear.
+    test('the sections come in the order the groups are declared', () {
+      expect(
+        WaypointIcon.byGroup.keys.toList(),
+        orderedEquals(WaypointIconGroup.values),
+      );
     });
 
     // The group says which section of the picker a glyph sits in and nothing

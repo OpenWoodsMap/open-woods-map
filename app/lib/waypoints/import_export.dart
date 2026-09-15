@@ -7,6 +7,7 @@ import 'package:xml/xml.dart';
 
 import '../tracks/track_style.dart';
 import 'legacy_categories.dart';
+import 'vendor_imports.dart';
 import 'waypoint_colour.dart';
 import 'waypoint_icon.dart';
 import 'waypoint_store.dart';
@@ -388,14 +389,29 @@ class WaypointImportExport {
               final notes = _childText(element, 'desc') ?? '';
               final time = DateTime.tryParse(_childText(element, 'time') ?? '');
               final type = _childText(element, 'type');
+              // iHunter writes neither `sym` nor `type`, and puts the pin and
+              // its colour in an extension of its own instead, so without this
+              // every waypoint in one of its files arrives on the default pin.
+              final pin = iHunterPin(_descendantText(element, 'pinimage'));
               return _waypoint(
                 name,
                 lat,
                 lng,
                 notes,
                 time,
-                icon: _iconFromGpx(_childText(element, 'sym'), type),
-                tags: _tagsFromGpx(type, _childText(element, 'cmt')),
+                icon:
+                    pin?.icon ?? _iconFromGpx(_childText(element, 'sym'), type),
+                tags: _tagsFromGpx(
+                  type,
+                  _childText(element, 'cmt'),
+                  // Only where iHunter's pin said more than the glyph can. The
+                  // species behind the feather, and the kind of sign behind the
+                  // paw, would otherwise be lost.
+                  extra: pin?.tag,
+                ),
+                colour: iHunterBackground(
+                  _descendantText(element, 'backgroundimage'),
+                ),
               );
             })
             .toList();
@@ -517,6 +533,61 @@ class WaypointImportExport {
         .toList();
   }
 
+  /// What a waypoint's name is called, ours first.
+  ///
+  /// Ours leads in every one of these lists because a file this app wrote has to
+  /// read back exactly; a foreign spelling is consulted only where ours is
+  /// absent. `title` is CalTopo's, and without it every marker in a CalTopo
+  /// backup arrives called "Imported waypoint".
+  static const _nameKeys = ['name', 'title'];
+
+  /// `description` is CalTopo's, and is also what KML calls the same field.
+  static const _notesKeys = ['notes', 'description'];
+
+  /// Epoch milliseconds, which is how both CalTopo and iHunter write a time.
+  /// `-created-on` is CalTopo's; the leading hyphen is theirs, not a typo.
+  static const _createdKeys = ['-created-on', 'created', 'timestamp', 'date'];
+
+  /// The first of [keys] present and not blank.
+  static String? _firstText(Map<String, dynamic> properties, List<String> keys) {
+    for (final key in keys) {
+      final value = properties[key];
+      if (value == null) continue;
+      final text = value.toString().trim();
+      if (text.isNotEmpty) return text;
+    }
+    return null;
+  }
+
+  /// When the waypoint was made, from whichever field carries it.
+  ///
+  /// Returns null rather than now() so the caller decides: a track and a point
+  /// want different fallbacks, and a missing date is not the same as today.
+  static DateTime? _createdAt(Map<String, dynamic> properties) {
+    if (DateTime.tryParse(properties['createdAt']?.toString() ?? '')
+        case final parsed?) {
+      return parsed;
+    }
+    for (final key in _createdKeys) {
+      final value = properties[key];
+      final epoch = value is num
+          ? value.toInt()
+          : int.tryParse(value?.toString() ?? '');
+      if (epoch == null || epoch <= 0) continue;
+      // Both files read for this wrote milliseconds. Seconds are accepted too
+      // because the two are told apart with certainty rather than guessed at:
+      // any real date in seconds is a ten digit number and the same date in
+      // milliseconds is thirteen, so the threshold cannot straddle a plausible
+      // value. Getting it wrong would date a waypoint to 1970, which is why it
+      // is worth being explicit rather than hopeful.
+      const millisecondsFrom1973 = 100000000000;
+      return DateTime.fromMillisecondsSinceEpoch(
+        epoch < millisecondsFrom1973 ? epoch * 1000 : epoch,
+      );
+    }
+    return null;
+  }
+
   List<Waypoint> fromGeoJson(String text) {
     final json = jsonDecode(text) as Map<String, dynamic>;
     return (json['features'] as List<dynamic>? ?? const [])
@@ -525,8 +596,14 @@ class WaypointImportExport {
           final properties = Map<String, dynamic>.from(
             feature['properties'] as Map? ?? const {},
           );
-          final geometry = feature['geometry'] as Map<String, dynamic>;
-          final coordinates = geometry['coordinates'] as List<dynamic>;
+          // RFC 7946 allows an unlocated feature, and CalTopo writes one for
+          // every photo in a map: a feature whose geometry is literally null.
+          // A full CalTopo backup used to throw on the first of them and import
+          // nothing at all, so this is the difference between all of someone's
+          // waypoints and none of them.
+          final geometry = feature['geometry'] as Map<String, dynamic>?;
+          final coordinates = geometry?['coordinates'] as List<dynamic>?;
+          if (geometry == null || coordinates == null) return null;
           final type = geometry['type']?.toString();
           // `category` is what an older backup carries. It migrates exactly as
           // a stored waypoint does — the glyph it drew as, plus its label as a
@@ -535,15 +612,53 @@ class WaypointImportExport {
           final legacy = properties['icon'] == null
               ? properties['category']?.toString()
               : null;
-          final icon = legacy == null
+          // Whether this is a file this app wrote. Every waypoint we export
+          // carries an `icon`, and every one an older build exported carries a
+          // `category`, so one of the two is present in any backup of ours.
+          //
+          // Worth knowing because a few of the fields below mean opposite
+          // things in the two cases. `marker-color` is the clearest: we write
+          // it on the way out purely so a GeoJSON viewer draws the waypoint in
+          // the right colour, derived from whatever the glyph or the user's
+          // choice already implied. Reading it back out of our own file would
+          // turn "follows its glyph" into "is permanently this colour" on every
+          // waypoint that had never been given a colour at all.
+          final ours = legacy != null || properties['icon'] != null;
+          final icon = legacy != null
+              ? legacyCategoryIcon(legacy)
+              : properties['icon'] != null
               ? WaypointIcon.fromId(properties['icon']?.toString())
-              : legacyCategoryIcon(legacy);
+              // CalTopo's own vocabulary, then one last try through `fromId` in
+              // case the symbol happens to be a word we already know.
+              : calTopoSymbol(properties['marker-symbol']?.toString()) ??
+                    WaypointIcon.fromId(
+                      properties['marker-symbol']?.toString(),
+                    );
           final tags = normaliseTags([
             ...(properties['tags'] as List<dynamic>? ?? const [])
                 .map((tag) => tag.toString()),
             ...legacyCategoryTags(legacy),
           ]);
-          final colour = WaypointColour.fromId(properties['colour']?.toString());
+          // Ours is an id from a closed list. CalTopo's is a free hex, arriving
+          // spelled three ways in one file — `0000FF`, `#FFFFFF`, `#ff0000`.
+          //
+          // Which of theirs to read is decided by the geometry, and only by the
+          // geometry. CalTopo also writes a `stroke` on its markers, and in the
+          // backup this was read from every marker that had no `marker-color`
+          // carried the identical `#FF0000` — a default it does not draw on a
+          // pin. Falling back to it would have turned fifteen waypoints red on
+          // the strength of a value the user never chose. Better to leave the
+          // colour unset and let the glyph's own colour stand.
+          final colour =
+              WaypointColour.fromId(properties['colour']?.toString()) ??
+              (ours
+                  ? null
+                  : WaypointColour.fromHex(
+                      properties[type == 'LineString'
+                              ? 'stroke'
+                              : 'marker-color']
+                          ?.toString(),
+                    ));
           if (type == 'LineString') {
             final points =
                 coordinates.map((item) {
@@ -559,10 +674,10 @@ class WaypointImportExport {
                   );
                 }).toList();
             return _trackWaypoint(
-              properties['name']?.toString() ?? 'Imported track',
+              _firstText(properties, _nameKeys) ?? 'Imported track',
               points,
-              properties['notes']?.toString() ?? '',
-              DateTime.tryParse(properties['createdAt']?.toString() ?? ''),
+              _firstText(properties, _notesKeys) ?? '',
+              _createdAt(properties),
               id: properties['id']?.toString(),
               icon: icon,
               tags: tags,
@@ -580,13 +695,11 @@ class WaypointImportExport {
           if (type != 'Point') return null;
           return Waypoint(
             id: properties['id']?.toString() ?? _id(),
-            name: properties['name']?.toString() ?? 'Imported waypoint',
+            name: _firstText(properties, _nameKeys) ?? 'Imported waypoint',
             latitude: (coordinates[1] as num).toDouble(),
             longitude: (coordinates[0] as num).toDouble(),
-            notes: properties['notes']?.toString() ?? '',
-            createdAt:
-                DateTime.tryParse(properties['createdAt']?.toString() ?? '') ??
-                DateTime.now(),
+            notes: _firstText(properties, _notesKeys) ?? '',
+            createdAt: _createdAt(properties) ?? DateTime.now(),
             icon: icon,
             tags: tags,
             colour: colour,
@@ -642,13 +755,17 @@ class WaypointImportExport {
   ///
   /// From `<cmt>`, only `#token` counts, so a sentence someone else wrote does
   /// not turn into tags.
-  static List<String> _tagsFromGpx(String? type, String? comment) =>
-      normaliseTags([
-        ...(type ?? '').split(','),
-        ...RegExp(r'#([\w-]+)')
-            .allMatches(comment ?? '')
-            .map((match) => match.group(1)!),
-      ]);
+  static List<String> _tagsFromGpx(
+    String? type,
+    String? comment, {
+    String? extra,
+  }) => normaliseTags([
+    ...(type ?? '').split(','),
+    ...RegExp(r'#([\w-]+)')
+        .allMatches(comment ?? '')
+        .map((match) => match.group(1)!),
+    if (extra != null) extra,
+  ]);
 
   /// The glyph for an imported GPX feature.
   ///
@@ -748,6 +865,15 @@ class WaypointImportExport {
     }
     return null;
   }
+
+  /// Text from anywhere inside [element], for a field a vendor nested.
+  ///
+  /// GPX puts anything non-standard under `<extensions>`, so iHunter's pin is a
+  /// grandchild of the `<wpt>` rather than a child and [_childText] never sees
+  /// it. Matched on the local name, which drops the `ihunter:` prefix, so the
+  /// namespace this app does not declare costs nothing.
+  String? _descendantText(XmlElement element, String localName) =>
+      _firstDescendant(element, localName)?.innerText;
 
   /// `<Data name="x"><value>y</value></Data>` pairs, flattened.
   Map<String, String> _extendedData(XmlElement element) {

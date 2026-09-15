@@ -775,4 +775,203 @@ void main() {
       });
     });
   });
+
+  // Every fixture below is copied verbatim out of a real export, because the
+  // point of these is that the file someone actually has imports. Both vendors
+  // write fields that no format documents and that no round trip of ours would
+  // ever produce, so nothing here can be caught by exporting and re-importing.
+  group('other apps\' files', () {
+    group('iHunter GPX', () {
+      // iHunter writes no <sym> and no <type>, so this extension is the only
+      // thing in the file that says what the waypoint is.
+      String gpx(String extensions) =>
+          '''
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="iHunter" xmlns="http://www.topografix.com/GPX/1/1"
+ xmlns:ihunter="https://ihunterapp.com/GPX/1/1">
+<wpt lat="45.303345" lon="-75.846748">
+ <ele>85.642670</ele>
+ <time>2025-09-06T16:54:46.000Z</time>
+ <name>pointless stone trail</name>
+ <desc></desc>
+ <extensions>
+  <ihunter:uuid>5e5f1ad6-d173-4462-abc4-f3e517cc0b14</ihunter:uuid>
+$extensions
+ </extensions>
+</wpt>
+</gpx>''';
+
+      test('a pin and its background become the glyph and the colour', () {
+        final back = transfer
+            .fromGpx(
+              gpx('''  <ihunter:pinimage>ihunter_pin_trees</ihunter:pinimage>
+  <ihunter:backgroundimage>ihunter_pin_background_brown</ihunter:backgroundimage>'''),
+            )
+            .single;
+        expect(back.icon, WaypointIcon.forest);
+        expect(back.colour, WaypointColour.brown);
+        expect(back.name, 'pointless stone trail');
+        expect(back.createdAt, DateTime.utc(2025, 9, 6, 16, 54, 46));
+      });
+
+      // The same export writes both forms: most pins carry the prefix, but
+      // `camp` and `farmer` arrive bare. Dropping either would leave part of
+      // one person's file on the default pin.
+      test('a pin without the ihunter_pin_ prefix still resolves', () {
+        final back = transfer
+            .fromGpx(gpx('  <ihunter:pinimage>camp</ihunter:pinimage>'))
+            .single;
+        expect(back.icon, WaypointIcon.camp);
+      });
+
+      // Where the glyph says less than iHunter's pin did, the word it loses is
+      // kept as a tag, so the list's search can still find the species.
+      test('a lossy pin keeps what the glyph cannot say', () {
+        final back = transfer
+            .fromGpx(
+              gpx('  <ihunter:pinimage>ihunter_pin_turkey</ihunter:pinimage>'),
+            )
+            .single;
+        expect(back.icon, WaypointIcon.feather);
+        expect(back.tags, ['turkey']);
+      });
+
+      test('a pin from a part of iHunter we have never seen keeps its word', () {
+        final back = transfer
+            .fromGpx(
+              gpx('  <ihunter:pinimage>ihunter_pin_wolverine</ihunter:pinimage>'),
+            )
+            .single;
+        expect(back.icon, WaypointIcon.fallback);
+        expect(back.tags, ['wolverine']);
+      });
+
+      test('a file with no extensions at all is unaffected', () {
+        final back = transfer.fromGpx(gpx('')).single;
+        expect(back.icon, WaypointIcon.fallback);
+        expect(back.tags, isEmpty);
+        expect(back.colour, isNull);
+      });
+    });
+
+    group('CalTopo GeoJSON', () {
+      // A full backup writes one of these per photo: a feature whose geometry
+      // is literally null. This used to throw on the first one and import none
+      // of the file, so it is the difference between all of someone's
+      // waypoints and none of them.
+      test('an unlocated photo feature is skipped, not fatal', () {
+        const geoJson = '''
+{"type":"FeatureCollection","features":[
+{"type":"Feature","geometry":null,"properties":{"class":"MapMediaObject",
+"title":"IMG_0431.jpeg","marker-symbol":"aperture","backendMediaId":"x"}},
+{"type":"Feature","geometry":{"type":"Point","coordinates":[-75.84,45.30,0,0]},
+"properties":{"class":"Marker","title":"HWY 58 - Parking Spot",
+"description":"pull in past the gate","marker-symbol":"point",
+"marker-color":"0000FF","stroke":"#FF0000","-created-on":1754769476380}}]}''';
+        final back = transfer.fromGeoJson(geoJson);
+        expect(back, hasLength(1));
+        expect(back.single.name, 'HWY 58 - Parking Spot');
+        expect(back.single.notes, 'pull in past the gate');
+      });
+
+      // CalTopo calls these `title` and `description`, and writes its dates as
+      // epoch milliseconds. Read none of them and every marker in a backup
+      // arrives nameless, noteless and dated today.
+      test('title, description and the epoch date are read', () {
+        const geoJson = '''
+{"type":"FeatureCollection","features":[{"type":"Feature",
+"properties":{"class":"Marker","title":"Home B-Line",
+"description":"through the cedars","-created-on":1754769476380},
+"geometry":{"type":"Point","coordinates":[-75.84,45.30,0,0]}}]}''';
+        final back = transfer.fromGeoJson(geoJson).single;
+        expect(back.name, 'Home B-Line');
+        expect(back.notes, 'through the cedars');
+        expect(back.createdAt, DateTime.fromMillisecondsSinceEpoch(1754769476380));
+      });
+
+      // Ours wins wherever both are present, or a file this app wrote stops
+      // reading back exactly.
+      test('our own field names win over CalTopo\'s', () {
+        const geoJson = '''
+{"type":"FeatureCollection","features":[{"type":"Feature",
+"properties":{"name":"Ours","title":"Theirs","notes":"ours",
+"description":"theirs","createdAt":"2026-09-10T16:30:00.000Z",
+"-created-on":1754769476380},
+"geometry":{"type":"Point","coordinates":[-77.1,45.1]}}]}''';
+        final back = transfer.fromGeoJson(geoJson).single;
+        expect(back.name, 'Ours');
+        expect(back.notes, 'ours');
+        expect(back.createdAt, DateTime.utc(2026, 9, 10, 16, 30));
+      });
+
+      // One backup spelled its colours `0000FF`, `#FFFFFF` and `#ff0000`.
+      test('a free hex lands on the nearest colour however it is spelled', () {
+        WaypointColour? colourOf(String hex) => transfer
+            .fromGeoJson('''
+{"type":"FeatureCollection","features":[{"type":"Feature",
+"properties":{"class":"Marker","title":"x","marker-color":"$hex"},
+"geometry":{"type":"Point","coordinates":[-77.1,45.1]}}]}''')
+            .single
+            .colour;
+        expect(colourOf('0000FF'), WaypointColour.blue);
+        expect(colourOf('#ff0000'), WaypointColour.red);
+        expect(colourOf('FF0000'), WaypointColour.red);
+      });
+
+      // CalTopo puts a `stroke` on its markers too, and in the backup this was
+      // read from every marker lacking a `marker-color` carried the identical
+      // `#FF0000` — a default it does not draw on a pin. Reading it would turn
+      // fifteen of that user's waypoints red on a value they never chose.
+      test('a marker ignores the stroke CalTopo sets by default', () {
+        const geoJson = '''
+{"type":"FeatureCollection","features":[{"type":"Feature",
+"properties":{"class":"Marker","title":"HWY 58 - Old Tree Stand",
+"stroke":"#FF0000","stroke-width":2},
+"geometry":{"type":"Point","coordinates":[-77.1,45.1]}}]}''';
+        final back = transfer.fromGeoJson(geoJson).single;
+        expect(back.colour, isNull);
+        expect(back.displayColour, back.icon.colour);
+      });
+
+      // On a line the stroke is the colour, and is the only place CalTopo puts
+      // one: not one shape in the backup had a `marker-color`.
+      test('a shape takes its colour from the stroke', () {
+        const geoJson = '''
+{"type":"FeatureCollection","features":[{"type":"Feature",
+"properties":{"class":"Shape","title":"Old Quarry Trail","stroke":"#00BCFF"},
+"geometry":{"type":"LineString","coordinates":[[-77.1,45.1],[-77.2,45.2]]}}]}''';
+        final back = transfer.fromGeoJson(geoJson).single;
+        expect(back.isTrack, isTrue);
+        expect(back.name, 'Old Quarry Trail');
+        expect(back.colour, WaypointColour.blue);
+      });
+
+      // We write `marker-color` on the way out for the benefit of GeoJSON
+      // viewers, derived from whatever the glyph already implied. Reading a hex
+      // back out of one of our own files would turn "follows its glyph" into
+      // "is permanently this colour" on every waypoint never given one, so the
+      // hex is only ever read from a file that has no `icon` in it.
+      test('a hex in our own file is left alone', () {
+        const geoJson = '''
+{"type":"FeatureCollection","features":[{"type":"Feature",
+"properties":{"id":"a","name":"North stand","icon":"stand","tags":[],
+"marker-color":"#8D6E63"},
+"geometry":{"type":"Point","coordinates":[-77.1,45.1]}}]}''';
+        final back = transfer.fromGeoJson(geoJson).single;
+        expect(back.colour, isNull);
+        expect(back.displayColour, WaypointIcon.stand.colour);
+      });
+
+      // 39 of 41 markers in the backup carried the generic `point`, which means
+      // "a marker" rather than a kind of place. Reading it as anything more
+      // would put a picture on a waypoint the user never asked for.
+      test('the generic point symbol becomes the plain pin', () {
+        const geoJson = '''
+{"type":"FeatureCollection","features":[{"type":"Feature",
+"properties":{"class":"Marker","title":"x","marker-symbol":"point"},
+"geometry":{"type":"Point","coordinates":[-77.1,45.1]}}]}''';
+        expect(transfer.fromGeoJson(geoJson).single.icon, WaypointIcon.pin);
+      });
+    });
+  });
 }

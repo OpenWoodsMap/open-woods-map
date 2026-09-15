@@ -887,14 +887,27 @@ and bush in both provinces, and its medians are what
 starts. Re-run it if a source changes; the estimate is only as honest as those
 numbers.
 
-## Waypoint glyphs: Material Icons, Apache 2.0
+## Waypoint glyphs: Material Icons and game-icons.net
 
-The only artwork the app bundles. `tools/icons/build_waypoint_icons.py` renders one
-glyph per `WaypointIcon` out of the Material Icons font that ships with the
-Flutter SDK, and converts each to a signed distance field so MapLibre can tint it
-per waypoint with `icon-color` instead of us shipping one PNG per colour. Source
-and licence are recorded in `app/assets/waypoint_icons/manifest.json`, which ships
-with the images.
+The only artwork the app bundles, from two sets under two licences:
+
+| Set | Glyphs | Licence | Attribution required |
+| --- | --- | --- | --- |
+| Material Icons, as bundled with the Flutter SDK | 25 | Apache 2.0 | No |
+| [game-icons.net](https://game-icons.net) | 28 | CC BY 3.0 | **Yes, in the app** |
+
+`tools/icons/build_waypoint_icons.py` renders one glyph per `WaypointIcon` and
+converts each to a signed distance field so MapLibre can tint it per waypoint with
+`icon-color` instead of us shipping one PNG per colour. Both sources, both licences
+and the CC BY credit line are recorded in
+`app/assets/waypoint_icons/manifest.json`, which ships with the images.
+
+CC BY 3.0 requires the authors to be named in the work itself, not merely in a
+repository, so the Settings screen carries the credit line and a test asserts it
+matches the manifest. The generator writes that line from the same table it builds
+the font from, which is what stops artwork by someone new being added without them
+being credited. Per-glyph authorship, which the licence also wants recoverable, is
+in `tools/icons/svg/ATTRIBUTION.md` alongside the vendored SVGs.
 
 One image is not the glyph as the font has it. The optional pin marker style needs a
 solid backdrop for a light glyph to read against, and Material Icons has no solid
@@ -906,24 +919,31 @@ keep a waypoint drawn on the coordinate it was saved at. A Dart test reads those
 measurements back out of the manifest, so regenerating the pin cannot quietly move
 every waypoint on the map.
 
-Chosen over the CC0 outdoor sets (Temaki, Maki, Osmic) because it is already in the
-dependency tree, so it adds no download and no licence to audit. Swapping one glyph
-for another Material glyph is a codepoint here and a codepoint in the generator.
-Swapping one for an SVG from another set is not: the generator rasterises by
-codepoint through PIL, which cannot read SVG, and `WaypointIcon.icon` is an
-`IconData` that the list rows, the editor chips and the map all read from, so a
-single non-font icon would need an SVG rasteriser in the build, `flutter_svg` in the
-app, a branch at every draw site, and an exemption from the test that stops the list
-glyph and the map glyph diverging. Worth it for a whole set, not for one icon.
+Material Icons came first because it is already in the dependency tree, so it adds
+no download and no licence to audit. What it does not have is animals: no deer, no
+bear, no bird, no track or scrape, and a hunting app whose species all look alike is
+not much of one. game-icons.net covers exactly that gap, is silhouetted rather than
+outlined — which is what a signed distance field needs — and is licensed for use
+with credit.
 
-Some of the set are compromises worth knowing about. Material has no ground blind,
-so `blind` borrows a shelter — a house with a bed, which reads more like a hostel
-than a hide — and `stand` uses a plain chair, which is not a tree stand either but
-is at least unambiguously a seat. `firepit` is labelled "Fire or grill" because the
-glyph is plainly a kettle grill, and `foraging` is a leaf standing in for both
-mushrooms and berries, neither of which Material has. A gate, a bridge, a bench and
-a water spring have no honest glyph at all, so they are absent rather than
-represented by something that means another thing.
+The second set is a font, not a pile of SVGs, and that is the load-bearing decision.
+`WaypointIcon.icon` is an `IconData` that the list rows, the editor chips, the filter
+chips and the map sprite generator all read. Images would have meant `flutter_svg` in
+the app, a branch at every draw site, and an exemption from the test that stops the
+list glyph and the map glyph diverging. Instead `tools/icons/build_owm_icon_font.py`
+compiles the vendored SVGs into `OwmIcons.ttf` with `fontTools`, assigning private-use
+codepoints, and the sprite generator rasterises from that same file — so the two
+cannot drift apart, and adding a glyph is a row in one table.
+
+Some of the set are still compromises worth knowing about. Material has no ground
+blind, so `blind` borrows a shelter — a house with a bed, which reads more like a
+hostel than a hide. `firepit` is a kettle grill and is labelled "Fire or grill"
+rather than pretending otherwise. `foraging` is a leaf, kept as the general case now
+that `mushroom`, `berries` and `nuts` exist for the specific ones. `feather` carries
+every upland bird, because one bird silhouette cannot honestly distinguish a grouse
+from a turkey — which is why importing from an app that *does* know keeps the species
+as a tag. A bench still has no honest glyph and so is absent, rather than represented
+by something that means another thing.
 
 The glyph is a picture and carries no classification: what a waypoint *is* lives in
 its tags. It does carry a default colour, and for the twenty glyphs that used to be
@@ -942,6 +962,32 @@ comma separated and in `<cmt>` as `#hashtags`, since different tools drop differ
 fields, and import takes the union. KML folders mean the glyph rather than tags: a
 KML folder has one parent, so a two-tag waypoint would be written twice, and since
 KML carries no id, re-importing would duplicate it.
+
+### Reading other apps' files
+
+`app/lib/waypoints/vendor_imports.dart` maps what CalTopo and iHunter put in their
+exports onto this icon set. Neither vocabulary is documented anywhere public, so
+every entry in those tables was read off a real export and nothing was extrapolated:
+a value nobody has seen falls back to the plain pin, because choosing a picture for
+it would be inventing a statement about someone else's waypoint. Where the mapping is
+lossy the source word is kept as a tag rather than dropped, so a turkey drawn with the
+feather glyph is still findable by searching for "turkey".
+
+Two traps in those files are worth recording, because both were found only by reading
+real exports and neither is visible from a round trip of our own:
+
+- **iHunter** writes no `<sym>` and no `<type>` at all. The pin and its colour are in
+  a private `<ihunter:>` extension, and the same file spells the pin name both with
+  and without its `ihunter_pin_` prefix.
+- **CalTopo** names its fields `title`, `description` and `-created-on` (epoch
+  milliseconds), writes one geometry-less feature per photo, and puts a `stroke` on
+  its markers as well as its shapes. That stroke is a default it does not draw on a
+  pin — in the backup this was built from, every marker lacking a `marker-color`
+  carried the same `#FF0000` — so it is read for lines only. A marker with no colour
+  of its own keeps following its glyph instead of turning red.
+
+Arbitrary hex from either lands on the nearest of our palette via
+`WaypointColour.nearest`, weighted towards green the way human vision is.
 
 ## Pack layout
 
