@@ -64,7 +64,10 @@ void main() {
     }
   }
 
-  Future<void> pumpPage(WidgetTester tester, List<Waypoint> items) async {
+  Future<WaypointStore> pumpPage(
+    WidgetTester tester,
+    List<Waypoint> items,
+  ) async {
     tester.view.physicalSize = const Size(1200, 2400);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -84,6 +87,7 @@ void main() {
       ),
     );
     await settle(tester);
+    return store;
   }
 
   Future<void> search(WidgetTester tester, String text) async {
@@ -301,5 +305,127 @@ void main() {
     expect(find.text('Gariepy creek'), findsOneWidget);
     expect(tester.widget<TextField>(find.byType(TextField)).controller?.text,
         isEmpty);
+  });
+
+  // The gap this closes: an imported file lands as a pile of untagged items, and
+  // before this the only way to remove them was one row at a time. Scoped to
+  // what is shown rather than to a tag, because "what is shown" is the one
+  // description that can name a set with no tag in common.
+  group('deleting what is shown', () {
+    Future<void> deleteShown(WidgetTester tester) async {
+      await tester.tap(find.byTooltip('Actions for the whole list'));
+      await settle(tester);
+      await tester.tap(find.textContaining('Delete'));
+      await settle(tester);
+      await tester.tap(find.text('Delete them'));
+      await settle(tester);
+    }
+
+    testWidgets('a search deletes its results and leaves the rest', (
+      tester,
+    ) async {
+      final store = await pumpPage(tester, [
+        _point('1', 'Bonnechere stand'),
+        _point('2', 'Bonnechere creek'),
+        _point('3', 'Gariepy creek'),
+      ]);
+
+      await search(tester, 'bonn');
+      await deleteShown(tester);
+
+      expect(store.items.map((item) => item.name), ['Gariepy creek']);
+    });
+
+    // The same action, on the same set, has to be able to say it is about to
+    // empty the list. A count cannot: 3 of 3 reads exactly like 3 of 300 to
+    // someone who has not counted the rest.
+    testWidgets('unfiltered, it says it is deleting everything', (tester) async {
+      await pumpPage(tester, [
+        _point('1', 'Bonnechere stand'),
+        _point('2', 'Gariepy creek'),
+      ]);
+
+      await tester.tap(find.byTooltip('Actions for the whole list'));
+      await settle(tester);
+
+      expect(find.text('Delete all 2…'), findsOneWidget);
+      await tester.tap(find.text('Delete all 2…'));
+      await settle(tester);
+
+      expect(find.text('Delete everything? All 2 waypoints.'), findsOneWidget);
+      expect(find.textContaining('Nothing will be left'), findsOneWidget);
+    });
+
+    testWidgets('filtered, it says it is only deleting the shown', (
+      tester,
+    ) async {
+      await pumpPage(tester, [
+        _point('1', 'Bonnechere stand'),
+        _point('2', 'Gariepy creek'),
+      ]);
+
+      await search(tester, 'bonn');
+      await tester.tap(find.byTooltip('Actions for the whole list'));
+      await settle(tester);
+
+      expect(find.text('Delete the 1 shown…'), findsOneWidget);
+      await tester.tap(find.text('Delete the 1 shown…'));
+      await settle(tester);
+
+      expect(find.text('Delete the 1 waypoint shown?'), findsOneWidget);
+      expect(find.textContaining('Everything they are hiding stays'),
+          findsOneWidget);
+    });
+
+    // A confirmation is something people dismiss on reflex, which is the whole
+    // reason the undo exists as well.
+    testWidgets('cancelling deletes nothing', (tester) async {
+      final store = await pumpPage(tester, [
+        _point('1', 'Bonnechere stand'),
+        _point('2', 'Gariepy creek'),
+      ]);
+
+      await tester.tap(find.byTooltip('Actions for the whole list'));
+      await settle(tester);
+      await tester.tap(find.textContaining('Delete all'));
+      await settle(tester);
+      await tester.tap(find.text('Cancel'));
+      await settle(tester);
+
+      expect(store.items, hasLength(2));
+    });
+
+    testWidgets('what it deleted can be undone', (tester) async {
+      final store = await pumpPage(tester, [
+        _point('1', 'Bonnechere stand'),
+        _point('2', 'Gariepy creek'),
+      ]);
+
+      await deleteShown(tester);
+      expect(store.items, isEmpty);
+
+      await tester.tap(find.text('UNDO'));
+      await settle(tester);
+
+      expect(
+        store.items.map((item) => item.name),
+        ['Bonnechere stand', 'Gariepy creek'],
+      );
+    });
+
+    // A search matching nothing must not offer to delete nothing, or the menu
+    // reads as though it is about to do something.
+    testWidgets('a search matching nothing offers no delete', (tester) async {
+      await pumpPage(tester, [_point('1', 'Bonnechere stand')]);
+
+      await search(tester, 'nothing matches this');
+      await tester.tap(find.byTooltip('Actions for the whole list'));
+      await settle(tester);
+
+      final item = tester.widget<PopupMenuItem<String>>(
+        find.widgetWithText(PopupMenuItem<String>, 'Delete the 0 shown…'),
+      );
+      expect(item.enabled, isFalse);
+    });
   });
 }

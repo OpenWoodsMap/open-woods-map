@@ -852,17 +852,43 @@ void main() {
       expect(store.items[1].tags, ['ridge']);
     });
 
-    // There is no tag to take off an untagged waypoint, and "delete everything
-    // with no tags" would put the most destructive sweep on the list's least
-    // considered group.
-    testWidgets('the untagged section offers no bulk action', (tester) async {
+    // Untagged used to be the one section with no bulk action, on the grounds
+    // that it was the list's least considered group. Importing inverted that: a
+    // vendor file arrives as dozens of untagged items at once, and it was the
+    // only pile that could not be cleared.
+    testWidgets('the untagged section can be deleted', (tester) async {
+      final store = await stockedWith(tester, [
+        point('1', 'Truck'),
+        point('2', 'Gate'),
+        point('3', 'North stand', tags: ['ridge']),
+      ]);
+      await pumpPage(tester, store);
+
+      expect(find.text('Untagged · 2'), findsOneWidget);
+      await tester.tap(find.byTooltip('Actions for untagged'));
+      await settle(tester);
+      await tester.tap(find.text('Delete these 2 waypoints'));
+      await settle(tester);
+      await tester.tap(find.text('Delete them'));
+      await settle(tester);
+
+      // The tagged one is untouched: this acts on having no tags at all, not on
+      // being in the section that happens to be showing.
+      expect(store.items.map((item) => item.name), ['North stand']);
+    });
+
+    // Styling and untagging need a tag to act on. Offering either here would be
+    // offering something that cannot do anything.
+    testWidgets('untagged is offered only the delete', (tester) async {
       final store = await stockedWith(tester, [point('1', 'Truck')]);
       await pumpPage(tester, store);
 
-      expect(find.text('Untagged · 1'), findsOneWidget);
-      expect(find.byTooltip('Actions for Untagged'), findsNothing);
-      // The row still deletes, one waypoint at a time, with its undo.
-      expect(find.byTooltip('More'), findsOneWidget);
+      await tester.tap(find.byTooltip('Actions for untagged'));
+      await settle(tester);
+
+      expect(find.textContaining('Style this tag'), findsNothing);
+      expect(find.textContaining('keep them'), findsNothing);
+      expect(find.text('Delete these 1 waypoint'), findsOneWidget);
     });
   });
 

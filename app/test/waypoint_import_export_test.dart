@@ -795,7 +795,6 @@ void main() {
  <name>pointless stone trail</name>
  <desc></desc>
  <extensions>
-  <ihunter:uuid>5e5f1ad6-d173-4462-abc4-f3e517cc0b14</ihunter:uuid>
 $extensions
  </extensions>
 </wpt>
@@ -851,6 +850,30 @@ $extensions
         expect(back.icon, WaypointIcon.fallback);
         expect(back.tags, isEmpty);
         expect(back.colour, isNull);
+      });
+
+      // GPX has no id field, so re-importing one normally doubles it. iHunter
+      // leaves a UUID in its extension, which makes its files recognisable on a
+      // second import in a way a plain GPX cannot be.
+      test('the uuid becomes the id, so a re-import can be recognised', () {
+        final file = gpx(
+          '  <ihunter:uuid>5e5f1ad6-d173-4462-abc4-f3e517cc0b14</ihunter:uuid>',
+        );
+        expect(
+          transfer.fromGpx(file).single.id,
+          '5e5f1ad6-d173-4462-abc4-f3e517cc0b14',
+        );
+        expect(transfer.fromGpx(file).single.id, transfer.fromGpx(file).single.id);
+      });
+
+      // Without one there is nothing to recognise, and minting a fresh id is the
+      // honest outcome: two waypoints in the same place are not necessarily the
+      // same waypoint.
+      test('a GPX with no uuid still gets an id of its own', () {
+        final first = transfer.fromGpx(gpx('')).single.id;
+        final second = transfer.fromGpx(gpx('')).single.id;
+        expect(first, isNotEmpty);
+        expect(first, isNot(second));
       });
     });
 
@@ -960,6 +983,34 @@ $extensions
         final back = transfer.fromGeoJson(geoJson).single;
         expect(back.colour, isNull);
         expect(back.displayColour, WaypointIcon.stand.colour);
+      });
+
+      // Import skips an id it already holds, so carrying CalTopo's own id
+      // through is what stops a second import of the same backup doubling it.
+      // Theirs is the GeoJSON feature id rather than a property, which is why it
+      // was being dropped: every one of the 52 features in the real backup has
+      // one, and they are stable across exports of the same map.
+      test('the feature id is kept, so a re-import can be recognised', () {
+        const geoJson = '''
+{"type":"FeatureCollection","features":[{"type":"Feature",
+"id":"66f0b6c3-b629-4cd8-ae7d-efa89249c4e9",
+"properties":{"class":"Marker","title":"Campsite"},
+"geometry":{"type":"Point","coordinates":[-77.1,45.1]}}]}''';
+        final back = transfer.fromGeoJson(geoJson);
+        expect(back.single.id, '66f0b6c3-b629-4cd8-ae7d-efa89249c4e9');
+        // Twice through the parser is two objects with one identity, which is
+        // exactly what the list's skip-what-we-hold check needs.
+        expect(transfer.fromGeoJson(geoJson).single.id, back.single.id);
+      });
+
+      // Ours is in `properties`, and has to win: a backup this app wrote must
+      // read back with the ids it was written with.
+      test('our own id in properties wins over a feature id', () {
+        const geoJson = '''
+{"type":"FeatureCollection","features":[{"type":"Feature","id":"theirs",
+"properties":{"id":"ours","name":"North stand","icon":"stand"},
+"geometry":{"type":"Point","coordinates":[-77.1,45.1]}}]}''';
+        expect(transfer.fromGeoJson(geoJson).single.id, 'ours');
       });
 
       // 39 of 41 markers in the backup carried the generic `point`, which means

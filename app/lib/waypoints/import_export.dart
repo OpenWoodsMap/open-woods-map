@@ -399,6 +399,10 @@ class WaypointImportExport {
                 lng,
                 notes,
                 time,
+                // GPX has no id of its own, so a re-import doubles the file
+                // unless the writer left something stable behind. iHunter does:
+                // a UUID beside the pin in its extension, one per waypoint.
+                id: _descendantText(element, 'uuid'),
                 icon:
                     pin?.icon ?? _iconFromGpx(_childText(element, 'sym'), type),
                 tags: _tagsFromGpx(
@@ -548,6 +552,26 @@ class WaypointImportExport {
   /// `-created-on` is CalTopo's; the leading hyphen is theirs, not a typo.
   static const _createdKeys = ['-created-on', 'created', 'timestamp', 'date'];
 
+  /// A stable identity for an imported feature, if the file carries one.
+  ///
+  /// This is what stops re-importing the same file doubling everything, because
+  /// import skips an id it already holds. Ours lives in `properties`, and
+  /// CalTopo's is the GeoJSON feature id — a UUID from its own database, present
+  /// on all 52 features of the backup this was written against and stable across
+  /// exports of the same map.
+  ///
+  /// Ours is checked first so that a backup this app wrote reads back exactly.
+  /// Null where the file offers nothing, which leaves the caller to mint one and
+  /// means a second import of that file will duplicate: that is the honest
+  /// outcome, since without an id there is no way to tell a re-import from two
+  /// waypoints that happen to sit in the same place.
+  static String? _featureId(
+    Map<String, dynamic> feature,
+    Map<String, dynamic> properties,
+  ) =>
+      _firstText(properties, const ['id']) ??
+      _firstText(feature, const ['id']);
+
   /// The first of [keys] present and not blank.
   static String? _firstText(Map<String, dynamic> properties, List<String> keys) {
     for (final key in keys) {
@@ -678,7 +702,7 @@ class WaypointImportExport {
               points,
               _firstText(properties, _notesKeys) ?? '',
               _createdAt(properties),
-              id: properties['id']?.toString(),
+              id: _featureId(feature, properties),
               icon: icon,
               tags: tags,
               colour: colour,
@@ -694,7 +718,7 @@ class WaypointImportExport {
           }
           if (type != 'Point') return null;
           return Waypoint(
-            id: properties['id']?.toString() ?? _id(),
+            id: _featureId(feature, properties) ?? _id(),
             name: _firstText(properties, _nameKeys) ?? 'Imported waypoint',
             latitude: (coordinates[1] as num).toDouble(),
             longitude: (coordinates[0] as num).toDouble(),
@@ -804,11 +828,12 @@ class WaypointImportExport {
     double lng,
     String notes,
     DateTime? createdAt, {
+    String? id,
     WaypointIcon icon = WaypointIcon.fallback,
     List<String> tags = const [],
     WaypointColour? colour,
   }) => Waypoint(
-    id: _id(),
+    id: id ?? _id(),
     name: name,
     latitude: lat,
     longitude: lng,

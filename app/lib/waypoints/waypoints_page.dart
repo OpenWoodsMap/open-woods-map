@@ -249,6 +249,27 @@ class _WaypointsPageState extends State<WaypointsPage> {
             icon: const Icon(Icons.file_open),
             onPressed: _import,
           ),
+          // Behind an overflow rather than an icon of its own. Everything else up
+          // here is reversible or additive; this is the only button on the screen
+          // that can remove a season's work in one tap, and it should not sit at
+          // thumb height next to the one that shares the file.
+          PopupMenuButton<String>(
+            // Not 'More': each row has one of those, and a tooltip that appears
+            // twice on a screen is one a test cannot tell apart either.
+            tooltip: 'Actions for the whole list',
+            icon: const Icon(Icons.more_vert),
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                enabled: visible.isNotEmpty,
+                onTap: _deleteShown,
+                child: Text(
+                  _filtered
+                      ? 'Delete the ${visible.length} shown…'
+                      : 'Delete all ${visible.length}…',
+                ),
+              ),
+            ],
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -543,19 +564,21 @@ class _WaypointsPageState extends State<WaypointsPage> {
                 hidden: !tagHidden,
               ),
             ),
-          // Only a tag gets bulk actions. There is no tag to take off an
-          // untagged waypoint, and "delete everything with no tags" would put
-          // the most destructive sweep on the list's least considered group.
-          if (tag != null)
-            PopupMenuButton<String>(
-              tooltip: 'Actions for $tag',
-              icon: const Icon(Icons.more_vert, size: 20),
-              onSelected: (choice) => switch (choice) {
-                'style' => _styleTag(tag),
-                'untag' => _removeTag(tag),
-                _ => _deleteTagged(tag),
-              },
-              itemBuilder: (context) => [
+          // Untagged gets the delete and nothing else. Styling and untagging
+          // both need a tag to act on; deleting does not, and leaving it out was
+          // what made an imported file impossible to clear.
+          PopupMenuButton<String>(
+            tooltip: tag == null
+                ? 'Actions for untagged'
+                : 'Actions for $tag',
+            icon: const Icon(Icons.more_vert, size: 20),
+            onSelected: (choice) => switch (choice) {
+              'style' => _styleTag(tag!),
+              'untag' => _removeTag(tag!),
+              _ => tag == null ? _deleteUntagged() : _deleteTagged(tag),
+            },
+            itemBuilder: (context) => [
+              if (tag != null) ...[
                 const PopupMenuItem(
                   value: 'style',
                   child: Text('Style this tag…'),
@@ -570,12 +593,16 @@ class _WaypointsPageState extends State<WaypointsPage> {
                   value: 'untag',
                   child: Text('Remove "$tag" from these $count, keep them'),
                 ),
-                PopupMenuItem(
-                  value: 'delete',
-                  child: Text('Delete these ${describeItems(_inSection(tag))}'),
-                ),
               ],
-            ),
+              PopupMenuItem(
+                value: 'delete',
+                child: Text(
+                  'Delete these '
+                  '${describeItems(tag == null ? _untaggedShown : _inSection(tag))}',
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -840,6 +867,11 @@ class _WaypointsPageState extends State<WaypointsPage> {
   List<Waypoint> _inSection(String tag) =>
       _visible.where((item) => item.tags.contains(tag)).toList();
 
+  /// The untagged section's contents, on the same "shown, not held" footing as
+  /// [_inSection].
+  List<Waypoint> get _untaggedShown =>
+      _visible.where((item) => item.tags.isEmpty).toList();
+
   /// Says so when the filter is hiding items that carry the tag and will
   /// therefore be left alone. Empty the rest of the time, which is most of it.
   String _scopeNote(String tag, Set<String> acting) {
@@ -895,19 +927,76 @@ class _WaypointsPageState extends State<WaypointsPage> {
   }
 
   /// Deletes every item carrying a tag. Asks first, then still offers undo.
+  Future<void> _deleteTagged(String tag) => _deleteMany(
+    _inSection(tag),
+    title: (items) => 'Delete $items tagged "$tag"?',
+    body:
+        'This deletes the items themselves, including any that also carry '
+        'other tags, so they will go from those sections too.',
+    extra: (ids) => _scopeNote(tag, ids),
+  );
+
+  /// Deletes the untagged items, which is the group an import lands in.
   ///
-  /// Both, not one or the other: the confirmation is because this removes work
-  /// that took a season to collect, and the undo is because a confirmation
-  /// dialog is something people dismiss on reflex.
-  Future<void> _deleteTagged(String tag) async {
-    final section = _inSection(tag);
-    final ids = section.map((item) => item.id).toSet();
+  /// This section used to be the one place with no bulk action, on the grounds
+  /// that "delete everything with no tags" put the most destructive sweep on the
+  /// list's least considered group. Importing inverted that: a CalTopo or
+  /// iHunter file arrives as dozens of untagged items at once, so untagged went
+  /// from the leftovers nobody thinks about to the pile most likely to need
+  /// clearing — and it was the only pile that could not be cleared.
+  ///
+  /// Styling and untagging still have no meaning here: there is no tag to give a
+  /// colour to, and none to take off.
+  Future<void> _deleteUntagged() => _deleteMany(
+    _untaggedShown,
+    title: (items) => 'Delete $items with no tags?',
+    body:
+        'Only items carrying no tags at all. Anything with even one tag stays, '
+        'whichever section it is showing in.',
+  );
+
+  /// Deletes everything the list is currently showing.
+  ///
+  /// Scoped to [_visible] because that is already what export means, and the two
+  /// sitting in the same menu saying different things about the word "shown"
+  /// would be worse than either. It is the one action that reaches items with no
+  /// tag and no search term in common, which is why it exists at all.
+  Future<void> _deleteShown() => _deleteMany(
+    _visible,
+    // Unfiltered, this is the whole list, and it must not be able to read as
+    // anything smaller. A count alone does not do that: 92 of 92 looks the same
+    // as 92 of 400 to someone who has not counted.
+    title: (items) => _filtered
+        ? 'Delete the $items shown?'
+        : 'Delete everything? All $items.',
+    body: _filtered
+        ? 'Just what the filter and search are showing. Everything they are '
+              'hiding stays.'
+        : 'Nothing is filtered, so this is the entire list, tagged and '
+              'untagged alike. Nothing will be left.',
+  );
+
+  /// Confirms, deletes, and offers one undo.
+  ///
+  /// Both a dialog and an undo, not one or the other: the confirmation is
+  /// because this removes work that took a season to collect, and the undo is
+  /// because a confirmation dialog is something people dismiss on reflex.
+  ///
+  /// [title] is given the phrase for the count so that every caller says "3
+  /// waypoints and 1 track" the same way, and none of them can say "1 items".
+  Future<void> _deleteMany(
+    List<Waypoint> items, {
+    required String Function(String items) title,
+    required String body,
+    String Function(Set<String> ids)? extra,
+  }) async {
+    if (items.isEmpty) return;
+    final ids = items.map((item) => item.id).toSet();
     final confirmed = await _confirm(
-      title: 'Delete ${describeItems(section)} tagged "$tag"?',
+      title: title(describeItems(items)),
       body:
-          'This deletes the items themselves, including any that also carry '
-          'other tags, so they will go from those sections too. You will get '
-          'one chance to undo it.${_scopeNote(tag, ids)}',
+          '$body You will get one chance to undo it.'
+          '${extra?.call(ids) ?? ''}',
       action: 'Delete them',
     );
     if (confirmed != true) return;
