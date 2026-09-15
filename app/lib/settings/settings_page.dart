@@ -7,9 +7,9 @@ import 'marker_style.dart';
 
 /// The app's settings, which are only the ones that exist.
 ///
-/// Deliberately one screen with one section. There is no appetite here for a
-/// list of plausible-looking switches: everything on this page changes
-/// something the user can see on the map the moment they go back to it.
+/// Deliberately one short screen. There is no appetite here for a list of
+/// plausible-looking switches: everything on this page changes something the
+/// user can see on the map the moment they go back to it.
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key, required this.settings});
 
@@ -96,6 +96,27 @@ class SettingsPage extends StatelessWidget {
                   ],
                 ),
               ),
+            const Divider(height: 32),
+            Text('The map itself', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 4),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              value: settings.lockNorth,
+              onChanged: settings.setLockNorth,
+              title: const Text('Keep north at the top'),
+              subtitle: const Text(
+                'Stops the map turning when you twist two fingers on it. '
+                'Leave this off if you like turning the map to face the way '
+                'you are walking.',
+                style: TextStyle(height: 1.35),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Either way, a button appears on the map whenever it is turned '
+              'away from north, and tapping it puts north back at the top.',
+              style: theme.textTheme.bodySmall?.copyWith(height: 1.35),
+            ),
           ],
         ),
       ),

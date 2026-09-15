@@ -94,8 +94,16 @@ class DisplaySettings extends ChangeNotifier {
   DisplaySettings({
     WaypointMarkerStyle? markerStyle,
     WaypointMarkerSize? markerSize,
+    bool lockNorth = lockNorthFallback,
   })  : _markerStyle = markerStyle ?? WaypointMarkerStyle.fallback,
-        _markerSize = markerSize ?? WaypointMarkerSize.fallback;
+        _markerSize = markerSize ?? WaypointMarkerSize.fallback,
+        _lockNorth = lockNorth;
+
+  /// Rotation stays on unless asked otherwise, because turning the map to match
+  /// what is in front of you is how most people read one, and a build that
+  /// silently took the gesture away would be a regression for everybody who
+  /// never opens Settings.
+  static const bool lockNorthFallback = false;
 
   /// Only a non-default choice is written, and the key is removed when the user
   /// goes back to the default. Same reason the overlay controller stores only
@@ -105,12 +113,17 @@ class DisplaySettings extends ChangeNotifier {
   /// they installed it.
   static const _markerStyleKey = 'waypoint.marker_style';
   static const _markerSizeKey = 'waypoint.marker_size';
+  static const _lockNorthKey = 'map.lock_north';
 
   WaypointMarkerStyle _markerStyle;
   WaypointMarkerSize _markerSize;
+  bool _lockNorth;
 
   WaypointMarkerStyle get markerStyle => _markerStyle;
   WaypointMarkerSize get markerSize => _markerSize;
+
+  /// Whether the map is pinned with north at the top and rotation disallowed.
+  bool get lockNorth => _lockNorth;
 
   /// Must be awaited before the map draws its waypoint layers, because they are
   /// built from these values and loading afterwards would draw the markers once
@@ -122,6 +135,7 @@ class DisplaySettings extends ChangeNotifier {
     // worth failing a launch over.
     _markerStyle = WaypointMarkerStyle.fromId(prefs.getString(_markerStyleKey));
     _markerSize = WaypointMarkerSize.fromId(prefs.getString(_markerSizeKey));
+    _lockNorth = prefs.getBool(_lockNorthKey) ?? lockNorthFallback;
     notifyListeners();
   }
 
@@ -137,6 +151,18 @@ class DisplaySettings extends ChangeNotifier {
     _markerSize = size;
     notifyListeners();
     await _store(_markerSizeKey, size.id, size == WaypointMarkerSize.fallback);
+  }
+
+  Future<void> setLockNorth(bool value) async {
+    if (value == _lockNorth) return;
+    _lockNorth = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    if (value == lockNorthFallback) {
+      await prefs.remove(_lockNorthKey);
+    } else {
+      await prefs.setBool(_lockNorthKey, value);
+    }
   }
 
   Future<void> _store(String key, String id, bool isDefault) async {

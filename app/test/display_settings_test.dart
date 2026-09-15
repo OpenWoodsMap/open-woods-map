@@ -17,6 +17,9 @@ void main() {
     final settings = await restart();
     expect(settings.markerStyle, WaypointMarkerStyle.iconOnly);
     expect(settings.markerSize, WaypointMarkerSize.standard);
+    // Rotation has always been allowed, and installing a build that carries this
+    // setting must not quietly take the gesture away from everybody.
+    expect(settings.lockNorth, isFalse);
   });
 
   test('the pin style survives a cold start', () async {
@@ -29,14 +32,21 @@ void main() {
     expect((await restart()).markerSize, WaypointMarkerSize.extraLarge);
   });
 
-  test('the two are stored apart, so one does not reset the other', () async {
+  test('the north lock survives a cold start', () async {
+    await (await restart()).setLockNorth(true);
+    expect((await restart()).lockNorth, isTrue);
+  });
+
+  test('the three are stored apart, so one does not reset another', () async {
     final first = await restart();
     await first.setMarkerStyle(WaypointMarkerStyle.pin);
     await first.setMarkerSize(WaypointMarkerSize.large);
+    await first.setLockNorth(true);
 
     final second = await restart();
     expect(second.markerStyle, WaypointMarkerStyle.pin);
     expect(second.markerSize, WaypointMarkerSize.large);
+    expect(second.lockNorth, isTrue);
   });
 
   // Same reason the overlay controller stores only the layers that are off: a
@@ -49,16 +59,19 @@ void main() {
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString('waypoint.marker_style'), isNull);
       expect(prefs.getString('waypoint.marker_size'), isNull);
+      expect(prefs.getBool('map.lock_north'), isNull);
     });
 
     test('a choice writes its id', () async {
       final settings = await restart();
       await settings.setMarkerStyle(WaypointMarkerStyle.pin);
       await settings.setMarkerSize(WaypointMarkerSize.small);
+      await settings.setLockNorth(true);
 
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString('waypoint.marker_style'), 'pin');
       expect(prefs.getString('waypoint.marker_size'), 'small');
+      expect(prefs.getBool('map.lock_north'), isTrue);
     });
 
     test('going back to the default forgets it', () async {
@@ -67,10 +80,13 @@ void main() {
       await settings.setMarkerStyle(WaypointMarkerStyle.iconOnly);
       await settings.setMarkerSize(WaypointMarkerSize.large);
       await settings.setMarkerSize(WaypointMarkerSize.standard);
+      await settings.setLockNorth(true);
+      await settings.setLockNorth(false);
 
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getString('waypoint.marker_style'), isNull);
       expect(prefs.getString('waypoint.marker_size'), isNull);
+      expect(prefs.getBool('map.lock_north'), isNull);
     });
   });
 
@@ -94,7 +110,8 @@ void main() {
 
       await settings.setMarkerStyle(WaypointMarkerStyle.pin);
       await settings.setMarkerSize(WaypointMarkerSize.large);
-      expect(notifications, 2);
+      await settings.setLockNorth(true);
+      expect(notifications, 3);
     });
 
     // Re-picking what is already chosen would otherwise rebuild every waypoint
@@ -106,6 +123,7 @@ void main() {
 
       await settings.setMarkerStyle(settings.markerStyle);
       await settings.setMarkerSize(settings.markerSize);
+      await settings.setLockNorth(settings.lockNorth);
       expect(notifications, 0);
     });
 

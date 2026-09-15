@@ -101,6 +101,24 @@ class _MapShellState extends State<MapShell> {
   String? _error;
   bool _styleReady = false;
 
+  /// The GeoJSON sources this shell has put into the *current* style. Reset on
+  /// every style load, because a source belongs to a style just as an image does.
+  ///
+  /// Remembered rather than asked for: [_putGeoJson] explains why it has to be
+  /// known at all, and `getSourceIds` is a round trip to the platform on a path
+  /// that runs on every position update.
+  final _geoJsonSources = <String>{};
+
+  /// Whether the map is turned away from north, which is what puts the
+  /// reset-to-north button on screen. Held as a boolean rather than read from
+  /// [_camera] so that the rebuild happens when the answer changes rather than on
+  /// every frame of a pan.
+  var _mapIsRotated = false;
+
+  /// How far off north still counts as north. A rotate gesture cannot land on
+  /// exactly zero, and a button that never goes away is worse than no button.
+  static const _squareWithNorth = 1.0;
+
   /// Saved basemap areas being outlined on the map, and which one the user asked
   /// to see. Empty unless they came back from Offline packs asking.
   List<BasemapArea> _offlineAreas = const [];
@@ -171,6 +189,10 @@ class _MapShellState extends State<MapShell> {
   void _onDisplayChanged() {
     if (!mounted) return;
     setState(() {});
+    // Turning the lock on means what it says. Leaving the map at the angle it
+    // happened to be at, with the gesture to fix it now disabled, would be a
+    // setting that pins the map crooked.
+    if (_display.lockNorth && _mapIsRotated) _resetNorth();
     // Saved tracks come along with the waypoints; the followed one is drawn
     // from its own source and would otherwise keep its old arrow size until
     // following stopped.
@@ -589,6 +611,20 @@ class _MapShellState extends State<MapShell> {
             onPressed: () => _zoom(zoomIn: false),
             child: const Icon(Icons.remove),
           ),
+          // Only while the map is turned. A permanent button for a state most
+          // people never enter would take room in the tightest column on screen,
+          // and its icon would say nothing when the map is already square.
+          if (_mapIsRotated) ...[
+            const SizedBox(height: 6),
+            FloatingActionButton.small(
+              heroTag: 'north',
+              tooltip: 'Put north back at the top',
+              backgroundColor: const Color(0xFFFFFBF0),
+              foregroundColor: const Color(0xFF1B4332),
+              onPressed: _resetNorth,
+              child: const Icon(Icons.explore),
+            ),
+          ],
           const SizedBox(height: 16),
           FloatingActionButton.small(
             heroTag: 'track',
@@ -635,6 +671,8 @@ class _MapShellState extends State<MapShell> {
                 _styleReady = true;
                 // A new style has no images, whatever the last one had.
                 _iconsRegistered = false;
+                // Nor any sources. See [_putGeoJson].
+                _geoJsonSources.clear();
                 await _attachLayers();
                 await _syncWaypointSource();
                 await _syncActiveTrackSource();
@@ -657,6 +695,7 @@ class _MapShellState extends State<MapShell> {
               },
               onCameraMove: (position) {
                 _camera = position;
+                _noteMapRotation(position.bearing);
               },
               onMapClick: _identify,
               // The gesture every map app uses for "put something here". A tap
@@ -672,6 +711,10 @@ class _MapShellState extends State<MapShell> {
                   : MyLocationRenderMode.normal,
               myLocationTrackingMode: MyLocationTrackingMode.none,
               compassEnabled: true,
+              // Turning the map to face the way you are walking is how a lot of
+              // people read one, so this stays on unless the user asks for north
+              // to be pinned. See DisplaySettings.lockNorth.
+              rotateGesturesEnabled: !_display.lockNorth,
               // Off by default, and without it the native side never emits a
               // camera event: onCameraMove goes silent and controller
               // .cameraPosition stays null, so a basemap swap rebuilt the map
@@ -913,6 +956,30 @@ class _MapShellState extends State<MapShell> {
   Future<void> _enableMyLocationPuck() async {
     if (_myLocationEnabled) return;
     setState(() => _myLocationEnabled = true);
+  }
+
+  /// Tracks whether the map has been turned off north.
+  ///
+  /// Only rebuilds when the answer flips, because this fires continuously
+  /// throughout a pan and the only thing that depends on it is one button.
+  void _noteMapRotation(double bearing) {
+    final offNorth = bearing.abs() % 360;
+    final rotated =
+        offNorth > _squareWithNorth && offNorth < 360 - _squareWithNorth;
+    if (rotated == _mapIsRotated || !mounted) return;
+    setState(() => _mapIsRotated = rotated);
+  }
+
+  /// Puts north back at the top.
+  ///
+  /// Offered whichever way the lock setting is set. With rotation allowed it is
+  /// the way back from a map you turned by accident while pinching to zoom, which
+  /// is how most people get there; with rotation locked the map should already be
+  /// square, and a way to fix it is worth having if it somehow is not.
+  Future<void> _resetNorth() async {
+    final map = _map;
+    if (map == null) return;
+    await map.animateCamera(CameraUpdate.bearingTo(0));
   }
 
   /// One zoom level per tap. MapLibre clamps at the style's min/max, so the
@@ -1707,11 +1774,13 @@ class _MapShellState extends State<MapShell> {
         if (guidance != null)
           {
             'type': 'Feature',
-            'properties': {
-              'colour': markerHexFor(
-                _followTrack?.displayColour ?? const Color(0xFF000000),
-              ),
-            },
+            // The track's own colour, so the dot reads as belonging to the line
+            // it is guiding along. Not `markerHexFor`, which answers the other
+            // question — what contrasts with this colour — and is for the arrows
+            // drawn *on* the line. Passing it here painted a white dot inside a
+            // white stroke on any dark track, invisible for as long as this layer
+            // never drew at all.
+            'properties': {'colour': _followTrack?.colourHex ?? '#000000'},
             'geometry': {
               'type': 'Point',
               'coordinates': [guidance.longitude, guidance.latitude],
@@ -1720,26 +1789,60 @@ class _MapShellState extends State<MapShell> {
       ],
     };
     try {
-      await map.setGeoJsonSource('owm-follow-position', data);
-      return;
-    } catch (_) {}
-    try {
-      await map.addSource(
+      await _putGeoJson(
+        map,
         'owm-follow-position',
-        GeojsonSourceProperties(data: data),
-      );
-      await map.addCircleLayer(
-        'owm-follow-position',
-        'owm-follow-position-dot',
-        const CircleLayerProperties(
-          circleRadius: 5,
-          circleColor: ['get', 'colour'],
-          circleStrokeWidth: 2,
-          circleStrokeColor: '#FFFFFF',
+        data,
+        () => map.addCircleLayer(
+          'owm-follow-position',
+          'owm-follow-position-dot',
+          const CircleLayerProperties(
+            circleRadius: 5,
+            circleColor: ['get', 'colour'],
+            circleStrokeWidth: 2,
+            circleStrokeColor: '#FFFFFF',
+          ),
         ),
       );
     } catch (_) {
       // The bar still has every number in it; only the dot is missing.
+    }
+  }
+
+  /// Puts [data] into [source], creating the source and its layers first time.
+  ///
+  /// This exists because `setGeoJsonSource` cannot be used to find out whether a
+  /// source is there. Given a name the style has not got, the platform logs
+  /// "source not found, skipping update" and returns normally — so the obvious
+  /// shape, set the data and create the source if that throws, never reaches the
+  /// second half. It reads as though it works, the log line is one warning among
+  /// hundreds, and the result is a layer that silently never draws. Both callers
+  /// here were written that way, and neither had ever drawn.
+  ///
+  /// So creation is tracked on the way in instead, per style: a basemap swap
+  /// drops every source with the style it belonged to, and [_geoJsonSources] is
+  /// cleared when the next one loads.
+  Future<void> _putGeoJson(
+    MapLibreMapController map,
+    String source,
+    Map<String, Object?> data,
+    Future<void> Function() addLayers,
+  ) async {
+    if (_geoJsonSources.contains(source)) {
+      await map.setGeoJsonSource(source, data);
+      return;
+    }
+    // Added before the layers, and recorded before either, so that a second call
+    // arriving while this one is still awaiting does not add the source twice.
+    _geoJsonSources.add(source);
+    try {
+      await map.addSource(source, GeojsonSourceProperties(data: data));
+      await addLayers();
+    } catch (_) {
+      // Let the next update try again rather than leaving the style short of a
+      // source that nothing will ever create.
+      _geoJsonSources.remove(source);
+      rethrow;
     }
   }
 
@@ -1764,21 +1867,18 @@ class _MapShellState extends State<MapShell> {
       ],
     };
     try {
-      await map.setGeoJsonSource('owm-active-track', data);
-      return;
-    } catch (_) {}
-    try {
-      await map.addSource(
+      await _putGeoJson(
+        map,
         'owm-active-track',
-        GeojsonSourceProperties(data: data),
-      );
-      await map.addLineLayer(
-        'owm-active-track',
-        'owm-active-track-line',
-        const LineLayerProperties(
-          lineColor: '#D32F2F',
-          lineWidth: 5,
-          lineOpacity: 0.95,
+        data,
+        () => map.addLineLayer(
+          'owm-active-track',
+          'owm-active-track-line',
+          const LineLayerProperties(
+            lineColor: '#D32F2F',
+            lineWidth: 5,
+            lineOpacity: 0.95,
+          ),
         ),
       );
     } catch (_) {

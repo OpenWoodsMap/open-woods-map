@@ -177,4 +177,45 @@ void main() {
     expect(find.textContaining('never dropped'), findsOneWidget);
     expect(find.textContaining('does not move a waypoint'), findsOneWidget);
   });
+
+  group('the north lock', () {
+    SwitchListTile lock(WidgetTester tester) =>
+        tester.widget<SwitchListTile>(find.byType(SwitchListTile));
+
+    testWidgets('opens off, because rotation has always been allowed',
+        (tester) async {
+      await pumpSettings(tester);
+
+      expect(find.text('Keep north at the top'), findsOneWidget);
+      expect(lock(tester).value, isFalse);
+    });
+
+    testWidgets('turning it on sets it and writes it down', (tester) async {
+      final settings = await pumpSettings(tester);
+
+      await tester.tap(find.byType(SwitchListTile));
+      await tester.pumpAndSettle();
+
+      expect(settings.lockNorth, isTrue);
+      expect(lock(tester).value, isTrue);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getBool('map.lock_north'), isTrue);
+    });
+
+    testWidgets('opens on what the map is actually doing', (tester) async {
+      SharedPreferences.setMockInitialValues({'map.lock_north': true});
+      await pumpSettings(tester);
+
+      expect(lock(tester).value, isTrue);
+    });
+
+    // Somebody who turns the lock on and then finds the map crooked needs to
+    // know the way out, and it is not on this page.
+    testWidgets('says the map has a button for putting north back',
+        (tester) async {
+      await pumpSettings(tester);
+
+      expect(find.textContaining('north back at the top'), findsOneWidget);
+    });
+  });
 }
