@@ -61,16 +61,17 @@ void main() {
     expect(chip(tester, 'Standard').selected, isFalse);
   });
 
-  testWidgets('picking the pin style sets it and writes it down',
+  // The pin is the default, so picking it would write nothing and prove nothing.
+  testWidgets('picking the icon-only style sets it and writes it down',
       (tester) async {
     final settings = await pumpSettings(tester);
 
-    await tap(tester, 'Icon in a pin');
+    await tap(tester, 'Icon only');
 
-    expect(settings.markerStyle, WaypointMarkerStyle.pin);
-    expect(chip(tester, 'Icon in a pin').selected, isTrue);
+    expect(settings.markerStyle, WaypointMarkerStyle.iconOnly);
+    expect(chip(tester, 'Icon only').selected, isTrue);
     final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getString('waypoint.marker_style'), 'pin');
+    expect(prefs.getString('waypoint.marker_style'), 'icon');
   });
 
   testWidgets('picking a size sets it and writes it down', (tester) async {
@@ -87,12 +88,12 @@ void main() {
   testWidgets('the two choices are independent', (tester) async {
     final settings = await pumpSettings(tester);
 
-    await tap(tester, 'Icon in a pin');
+    await tap(tester, 'Icon only');
     await tap(tester, 'Small');
 
-    expect(settings.markerStyle, WaypointMarkerStyle.pin);
+    expect(settings.markerStyle, WaypointMarkerStyle.iconOnly);
     expect(settings.markerSize, WaypointMarkerSize.small);
-    expect(chip(tester, 'Icon in a pin').selected, isTrue);
+    expect(chip(tester, 'Icon only').selected, isTrue);
     expect(chip(tester, 'Small').selected, isTrue);
   });
 
@@ -106,6 +107,7 @@ void main() {
     testWidgets('a bare glyph is drawn in the waypoint\'s own colour',
         (tester) async {
       await pumpSettings(tester);
+      await tap(tester, 'Icon only');
 
       final sample = glyphs(tester, WaypointIcon.stand).first;
       expect(sample.color, WaypointIcon.stand.colour);

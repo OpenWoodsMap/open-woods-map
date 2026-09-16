@@ -340,19 +340,18 @@ void main() {
     test('anything unrecognised falls back rather than throwing', () {
       expect(WaypointMarkerSize.fromId('enormous'), WaypointMarkerSize.standard);
       expect(WaypointMarkerSize.fromId(null), WaypointMarkerSize.standard);
-      expect(
-        WaypointMarkerStyle.fromId('teardrop'),
-        WaypointMarkerStyle.iconOnly,
-      );
-      expect(WaypointMarkerStyle.fromId(null), WaypointMarkerStyle.iconOnly);
+      expect(WaypointMarkerStyle.fromId('teardrop'), WaypointMarkerStyle.pin);
+      expect(WaypointMarkerStyle.fromId(null), WaypointMarkerStyle.pin);
     });
 
-    // Installing a build with this setting in it must not restyle a map
-    // somebody already knows.
-    test('the default style is what the map drew before the setting existed',
-        () {
-      expect(WaypointMarkerStyle.fallback, WaypointMarkerStyle.iconOnly);
-      expect(glyphImageOffset(WaypointMarkerStyle.fallback), [0, 0]);
+    // The default is what everybody who never opens Settings gets, so it is the
+    // one whose offsets have to be right: a pin drawn with the bare glyph's
+    // offsets would sit half its own height off the coordinate.
+    test('the default pins the glyph, so its point marks the spot', () {
+      expect(WaypointMarkerStyle.fallback, WaypointMarkerStyle.pin);
+      final offset = glyphImageOffset(WaypointMarkerStyle.fallback);
+      expect(offset[0], 0, reason: 'the glyph stays on the pin’s axis');
+      expect(offset[1], isNegative, reason: 'and rides up into its head');
       expect(glyphCanvasDp(WaypointMarkerSize.fallback), 24.0);
     });
   });

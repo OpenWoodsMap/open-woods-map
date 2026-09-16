@@ -13,18 +13,20 @@ void main() {
     return settings;
   }
 
-  test('a fresh install draws what the map has always drawn', () async {
+  test('a fresh install pins the glyph, so its point marks the spot', () async {
     final settings = await restart();
-    expect(settings.markerStyle, WaypointMarkerStyle.iconOnly);
+    expect(settings.markerStyle, WaypointMarkerStyle.pin);
     expect(settings.markerSize, WaypointMarkerSize.standard);
     // Rotation has always been allowed, and installing a build that carries this
     // setting must not quietly take the gesture away from everybody.
     expect(settings.lockNorth, isFalse);
   });
 
-  test('the pin style survives a cold start', () async {
-    await (await restart()).setMarkerStyle(WaypointMarkerStyle.pin);
-    expect((await restart()).markerStyle, WaypointMarkerStyle.pin);
+  // Asserted with the style that is not the default, so that the storage is
+  // actually exercised rather than the fallback happening to agree.
+  test('the icon-only style survives a cold start', () async {
+    await (await restart()).setMarkerStyle(WaypointMarkerStyle.iconOnly);
+    expect((await restart()).markerStyle, WaypointMarkerStyle.iconOnly);
   });
 
   test('the size survives a cold start', () async {
@@ -39,12 +41,12 @@ void main() {
 
   test('the three are stored apart, so one does not reset another', () async {
     final first = await restart();
-    await first.setMarkerStyle(WaypointMarkerStyle.pin);
+    await first.setMarkerStyle(WaypointMarkerStyle.iconOnly);
     await first.setMarkerSize(WaypointMarkerSize.large);
     await first.setLockNorth(true);
 
     final second = await restart();
-    expect(second.markerStyle, WaypointMarkerStyle.pin);
+    expect(second.markerStyle, WaypointMarkerStyle.iconOnly);
     expect(second.markerSize, WaypointMarkerSize.large);
     expect(second.lockNorth, isTrue);
   });
@@ -64,20 +66,20 @@ void main() {
 
     test('a choice writes its id', () async {
       final settings = await restart();
-      await settings.setMarkerStyle(WaypointMarkerStyle.pin);
+      await settings.setMarkerStyle(WaypointMarkerStyle.iconOnly);
       await settings.setMarkerSize(WaypointMarkerSize.small);
       await settings.setLockNorth(true);
 
       final prefs = await SharedPreferences.getInstance();
-      expect(prefs.getString('waypoint.marker_style'), 'pin');
+      expect(prefs.getString('waypoint.marker_style'), 'icon');
       expect(prefs.getString('waypoint.marker_size'), 'small');
       expect(prefs.getBool('map.lock_north'), isTrue);
     });
 
     test('going back to the default forgets it', () async {
       final settings = await restart();
-      await settings.setMarkerStyle(WaypointMarkerStyle.pin);
       await settings.setMarkerStyle(WaypointMarkerStyle.iconOnly);
+      await settings.setMarkerStyle(WaypointMarkerStyle.pin);
       await settings.setMarkerSize(WaypointMarkerSize.large);
       await settings.setMarkerSize(WaypointMarkerSize.standard);
       await settings.setLockNorth(true);
@@ -96,7 +98,7 @@ void main() {
       'waypoint.marker_size': 'enormous',
     });
     final settings = await restart();
-    expect(settings.markerStyle, WaypointMarkerStyle.iconOnly);
+    expect(settings.markerStyle, WaypointMarkerStyle.pin);
     expect(settings.markerSize, WaypointMarkerSize.standard);
   });
 
@@ -108,7 +110,7 @@ void main() {
       var notifications = 0;
       settings.addListener(() => notifications++);
 
-      await settings.setMarkerStyle(WaypointMarkerStyle.pin);
+      await settings.setMarkerStyle(WaypointMarkerStyle.iconOnly);
       await settings.setMarkerSize(WaypointMarkerSize.large);
       await settings.setLockNorth(true);
       expect(notifications, 3);

@@ -909,8 +909,9 @@ the font from, which is what stops artwork by someone new being added without th
 being credited. Per-glyph authorship, which the licence also wants recoverable, is
 in `tools/icons/svg/ATTRIBUTION.md` alongside the vendored SVGs.
 
-One image is not the glyph as the font has it. The optional pin marker style needs a
-solid backdrop for a light glyph to read against, and Material Icons has no solid
+One image is not the glyph as the font has it. The pin marker style, which is the
+default, needs a solid backdrop for a light glyph to read against, and Material
+Icons has no solid
 pin: `place` is a teardrop with a circular counter punched out of exactly the part
 the glyph has to sit on. The generator closes that counter — a deterministic hole
 fill of the same Material outline, not new artwork — and records where the pin's

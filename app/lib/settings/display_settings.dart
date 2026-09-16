@@ -35,9 +35,14 @@ enum WaypointMarkerStyle {
   final String label;
   final String blurb;
 
-  /// What the map has always drawn, so that installing a build with this
-  /// setting in it does not silently restyle a map somebody already knows.
-  static const fallback = WaypointMarkerStyle.iconOnly;
+  /// The pin is the default because its point marks the coordinate, where a
+  /// centred glyph only sits near it, and because it holds its shape against a
+  /// busy tenure fill. Editing this constant restyles the map for everybody who
+  /// never opened Settings, including anyone who chose the old default back when
+  /// it was the default and so has nothing written down. That is the deliberate
+  /// price of the rule below: only a non-default choice is stored, so that the
+  /// default stays free to improve.
+  static const fallback = WaypointMarkerStyle.pin;
 
   static WaypointMarkerStyle fromId(String? id) => values.firstWhere(
         (style) => style.id == id,
