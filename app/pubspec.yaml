@@ -1,7 +1,7 @@
 name: open_woods_map
 description: Offline-first Canadian hunting land map
 publish_to: 'none'
-version: 0.1.7+8
+version: 0.1.8+9
 
 environment:
   sdk: '>=3.7.0 <4.0.0'
