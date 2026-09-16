@@ -187,6 +187,37 @@ def glyph_name(icon_id: str) -> str:
     return icon_id.replace("-", "_")
 
 
+# game-icons composes each icon inside the 512 box, so the ink lands only a few
+# units off the axis at worst. Further out than this is not the artwork, it is a
+# metrics or viewBox mistake, and this script shipped one: it recorded every left
+# side bearing as 0 while the outlines kept their true x. A rasteriser places the
+# glyph origin at `xMin - lsb`, so each glyph drew its own xMin too far left.
+# Art that filled the box hid it; the ladder, 121 units in, sat a quarter of the
+# em off centre.
+CENTRING_TOLERANCE = 40
+
+
+def horizontal_metrics(builder, glyphs, order) -> dict[str, tuple[int, int]]:
+    """`(advance, lsb)` per glyph, with the bearing read off the real outline."""
+    glyf = builder.font["glyf"]
+    metrics = {}
+    for name in order:
+        glyph = glyphs[name]
+        if glyph.numberOfContours == 0:
+            metrics[name] = (UPM, 0)
+            continue
+        glyph.recalcBounds(glyf)
+        offset = (glyph.xMin + glyph.xMax) / 2 - UPM / 2
+        if abs(offset) > CENTRING_TOLERANCE:
+            raise ValueError(
+                f"{name}: ink spans x {glyph.xMin}..{glyph.xMax}, whose centre is "
+                f"{offset:+.0f} units from the em's. It would draw visibly "
+                "off-centre wherever Flutter sizes it as an Icon."
+            )
+        metrics[name] = (UPM, glyph.xMin)
+    return metrics
+
+
 def write_font(glyphs: dict[str, object], names: list[str]) -> None:
     order = [".notdef", *names]
     all_glyphs = {".notdef": TTGlyphPen(None).glyph(), **glyphs}
@@ -197,7 +228,7 @@ def write_font(glyphs: dict[str, object], names: list[str]) -> None:
         {code: glyph_name(icon) for icon, (code, _, _) in GLYPHS.items()}
     )
     builder.setupGlyf(all_glyphs)
-    builder.setupHorizontalMetrics({name: (UPM, 0) for name in order})
+    builder.setupHorizontalMetrics(horizontal_metrics(builder, all_glyphs, order))
     # The ink fills the em square and sits on the baseline, which is what makes a
     # Flutter Icon of a given fontSize come out the same visual size as a
     # Material one.
