@@ -55,12 +55,26 @@ void main() {
 
   /// See waypoints_page_test.dart: the store reads a real file and the loading
   /// spinner never settles, so this pumps in real time rather than settling.
-  Future<void> settle(WidgetTester tester) async {
-    for (var i = 0; i < 8; i++) {
+  /// Pumps the tree while letting the store's real file writes run. See the
+  /// same helper in `waypoints_page_test.dart` for why [until] exists: deleting
+  /// shows its message only after the write returns, and no fixed duration is
+  /// both long enough for a loaded runner's disk and short enough to leave the
+  /// SnackBar still on screen.
+  Future<void> settle(WidgetTester tester, {Finder? until}) async {
+    for (var turn = 0; turn < 40; turn++) {
       await tester.runAsync(() async {
         await Future<void>.delayed(const Duration(milliseconds: 25));
       });
       await tester.pump(const Duration(milliseconds: 120));
+      if (until == null) {
+        if (turn >= 7) return;
+      } else if (until.evaluate().isNotEmpty) {
+        // Present is not yet tappable: the SnackBar is still sliding in.
+        for (var settling = 0; settling < 4; settling++) {
+          await tester.pump(const Duration(milliseconds: 120));
+        }
+        return;
+      }
     }
   }
 
@@ -318,7 +332,10 @@ void main() {
       await tester.tap(find.textContaining('Delete'));
       await settle(tester);
       await tester.tap(find.text('Delete them'));
-      await settle(tester);
+      // Until the undo appears, because it is only offered once the store's
+      // write has returned. A fixed wait let a slow disk report the items as
+      // still there.
+      await settle(tester, until: find.text('UNDO'));
     }
 
     testWidgets('a search deletes its results and leaves the rest', (

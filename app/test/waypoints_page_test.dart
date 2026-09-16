@@ -85,12 +85,33 @@ void main() {
   /// `initState` for ever. And repeated `pump` rather than `pumpAndSettle`,
   /// because the loading spinner schedules frames indefinitely, so settling
   /// waits out its ten-minute timeout instead of finishing.
-  Future<void> settle(WidgetTester tester) async {
-    for (var i = 0; i < 8; i++) {
+  /// Pumps the tree while letting the store's real file writes run.
+  ///
+  /// A fixed number of turns cannot be made safe on its own. The real-time half
+  /// is waiting on disk, and how long a loaded runner needs is not knowable —
+  /// deleting shows its message only after the write returns, so three of these
+  /// tests failed in CI while passing on every developer machine. The fake-time
+  /// half cannot simply be raised to cover it either: past four seconds it
+  /// dismisses the very SnackBar those tests then look for. So a caller waiting
+  /// for something nameable passes it as [until], and the loop stops the moment
+  /// it appears rather than betting on a duration.
+  Future<void> settle(WidgetTester tester, {Finder? until}) async {
+    for (var turn = 0; turn < 40; turn++) {
       await tester.runAsync(() async {
         await Future<void>.delayed(const Duration(milliseconds: 25));
       });
       await tester.pump(const Duration(milliseconds: 120));
+      if (until == null) {
+        if (turn >= 7) return;
+      } else if (until.evaluate().isNotEmpty) {
+        // Present is not yet tappable: a SnackBar that has only just been
+        // inserted is still sliding in, and a tap aimed at it lands on whatever
+        // is behind it. Finish the entrance before handing back.
+        for (var settling = 0; settling < 4; settling++) {
+          await tester.pump(const Duration(milliseconds: 120));
+        }
+        return;
+      }
     }
   }
 
@@ -285,7 +306,7 @@ void main() {
       );
       await settle(tester);
       await tester.tap(find.text('Delete').last);
-      await settle(tester);
+      await settle(tester, until: find.text('UNDO'));
 
       expect(store.items.map((item) => item.name), ['First', 'Last']);
       expect(find.text('Deleted Middle.'), findsOneWidget);
@@ -713,7 +734,7 @@ void main() {
       await tester.tap(find.text('Remove "ridge" from these 2, keep them'));
       await settle(tester);
       await tester.tap(find.widgetWithText(FilledButton, 'Remove the tag'));
-      await settle(tester);
+      await settle(tester, until: find.text('UNDO'));
       await tester.tap(find.text('UNDO'));
       await settle(tester);
 
@@ -733,7 +754,10 @@ void main() {
         findsOneWidget,
       );
       await tester.tap(find.widgetWithText(FilledButton, 'Delete them'));
-      await settle(tester);
+      // Until the message, because it is only shown once the store's write has
+      // returned. Waiting a fixed span instead let a slow disk report the
+      // waypoints as still present.
+      await settle(tester, until: find.text('UNDO'));
 
       expect(store.items.map((item) => item.name), ['Spring']);
       // Including out of the other section it was in, which the dialog said.
@@ -752,7 +776,7 @@ void main() {
       await tester.tap(find.text('Delete these 2 waypoints'));
       await settle(tester);
       await tester.tap(find.widgetWithText(FilledButton, 'Delete them'));
-      await settle(tester);
+      await settle(tester, until: find.text('UNDO'));
       await tester.tap(find.text('UNDO'));
       await settle(tester);
 
