@@ -990,6 +990,29 @@ real exports and neither is visible from a round trip of our own:
 Arbitrary hex from either lands on the nearest of our palette via
 `WaypointColour.nearest`, weighted towards green the way human vision is.
 
+## Who to ask: authority contacts
+
+The Land Info card can build a prompt that helps somebody write to the office that
+answers questions about hunting on a given piece of ground. Those addresses live in
+`app/lib/map/ask_ai.dart`, not in a pack, and each carries the provincial page it was
+read off.
+
+| Province | Office | Read off |
+|----------|--------|----------|
+| Ontario | Natural Resources Information and Support Centre (NRISC) | [Ontario Hunting Regulations Summary — how to use this summary](https://www.ontario.ca/document/ontario-hunting-regulations-summary/how-use-this-summary) |
+| Quebec | Biodiversité, Faune et Parcs — Service à la clientèle (MELCCFP) | [Coordonnées générales du MELCCFP](https://www.quebec.ca/gouvernement/ministeres-organismes/environnement/coordonnees-structure/coordonnees-generales) |
+
+Both were verified on 2026-09-16. They are in the app rather than in a pack for two
+reasons: an address is administrative fact about a province rather than geometry, and
+a pack-borne address would leave anybody on an older pack with nowhere to write.
+
+This is the one piece of data in the app whose rot is completely silent. A stale layer
+draws visibly wrong; a stale address produces a question nobody ever answers and a
+hunter who believes they asked. Re-read the source page before editing one, and do not
+correct one from memory. A province with no verified contact is handled — the prompt
+asks the AI to identify the right office and say how it knows — so leaving an entry
+out is safer than guessing at it.
+
 ## Pack layout
 
 Nothing province-specific is bundled in the app binary — only `data/provinces.json`

@@ -6,6 +6,7 @@ import '../data/models.dart';
 import '../data/province_loader.dart';
 import '../data/seasons.dart';
 import '../ui/messages.dart';
+import 'ask_ai.dart';
 import 'land_info.dart';
 import 'policy_markdown.dart';
 import 'seasons_tab.dart';
@@ -27,14 +28,25 @@ Future<void> showLandInfoSheet(
       backgroundColor: const Color(0xFFFFFBF0),
       builder: (context) => FractionallySizedBox(
         heightFactor: 0.88,
-        child: _LandInfoReport(
-          info: info,
-          provinceId: provinceId,
-          loader: loader,
-          manifest: manifest,
-          seasons: seasons,
-          layers: layers,
-          onSaveWaypoint: onSaveWaypoint,
+        // The sheet gets a messenger of its own, because the app's lives above
+        // the Navigator and paints its messages under any modal route. Every
+        // "copied" confirmation raised from this card went behind the sheet and
+        // was never seen, which made a button that had worked look dead. The
+        // Scaffold is only what a messenger needs to have somewhere below it,
+        // and stays transparent so the sheet keeps its own colour and corners.
+        child: ScaffoldMessenger(
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: _LandInfoReport(
+              info: info,
+              provinceId: provinceId,
+              loader: loader,
+              manifest: manifest,
+              seasons: seasons,
+              layers: layers,
+              onSaveWaypoint: onSaveWaypoint,
+            ),
+          ),
         ),
       ),
     );
@@ -248,6 +260,8 @@ class _LandTab extends StatelessWidget {
           ],
         ),
         const Divider(),
+        _AskAi(info: info, manifest: manifest, layers: layers),
+        const Divider(),
         Text(
           'Map results are informational and may be incomplete. Verify current '
           'regulations, posted notices, ownership, and boundaries before use.'
@@ -335,12 +349,8 @@ class _FeatureReport extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isWmu = feature.layerId == 'wmu';
-    final title = isWmu
-        ? 'WMU ${feature.properties['wmu_id'] ?? feature.name ?? ''}'.trim()
-        : (feature.name ??
-            layer?.defaultName ??
-            feature.layerId.replaceAll('_', ' '));
-    final tenure = _ownerLabel(feature.ownerType) ?? layer?.tenure;
+    final title = featureTitle(feature, layer);
+    final tenure = tenureLabel(feature, layer);
     final basisNote = layer?.basisNote(feature.basis) ?? feature.notes;
     final area = feature.areaHa;
     final fromStatute = quotesStatute(feature.basis);
@@ -354,7 +364,7 @@ class _FeatureReport extends StatelessWidget {
             title,
             style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
           ),
-          if (!isWmu && tenure != null) Text(tenure),
+          if (tenure != null) Text(tenure),
           if (feature.designation != null)
             Text('Designation: ${feature.designation}'),
           if (feature.within != null) Text('Inside: ${feature.within}'),
@@ -484,14 +494,6 @@ class _FeatureReport extends StatelessWidget {
       ),
     );
   }
-
-  String? _ownerLabel(String? ownerType) => switch (ownerType) {
-        'county' => 'County forest — publicly owned',
-        'region' => 'Regional forest — publicly owned',
-        'municipal' => 'Municipal forest — publicly owned',
-        'conservation_authority' => 'Conservation authority forest',
-        _ => null,
-      };
 
   Future<void> _openPolicy(BuildContext context, String policyId) async {
     final text = await loader.loadPolicy(provinceId, policyId);
@@ -901,6 +903,161 @@ class _RegulationQuote extends StatelessWidget {
   }
 }
 
+/// Hands what the card found to an AI of the user's choosing, as text.
+///
+/// Copy only, and on purpose. No link to any particular assistant, so the user
+/// picks one they trust and the app never has to chase a market it cannot keep
+/// up with. No mail app either, so nothing can leave the phone by accident and
+/// the app is never the thing that sent a ministry an email.
+///
+/// The division of labour is the point: the app supplies the part that has to be
+/// exact, which is the coordinates, the citations and the gaps, and leaves the
+/// wording to the person and their AI. That is also why two people asking the
+/// same ministry about the same parcel do not send it the same letter.
+class _AskAi extends StatelessWidget {
+  const _AskAi({
+    required this.info,
+    required this.manifest,
+    required this.layers,
+  });
+
+  final LandInfo info;
+  final ProvinceManifest manifest;
+  final Map<String, LoadedLayer> layers;
+
+  Future<void> _copy(BuildContext context, String text, String what) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!context.mounted) return;
+    showMessage(
+      context,
+      '$what copied. Paste it into whichever AI you use.',
+      behavior: SnackBarBehavior.floating,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final small = Theme.of(context).textTheme.bodySmall;
+    final authority = wildlifeAuthorities[manifest.id];
+    return _Section(
+      title: 'ASK AN AI',
+      children: [
+        Text(
+          'Copies a prompt to your clipboard, carrying this point’s '
+          'coordinates, records and citations. Paste it into whichever AI you '
+          'use. Nothing is sent from this app.',
+          style: const TextStyle(height: 1.35),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final flavour in AskAi.values)
+              OutlinedButton.icon(
+                icon: Icon(
+                  switch (flavour) {
+                    AskAi.explain => Icons.forum_outlined,
+                    AskAi.enquiry => Icons.drafts_outlined,
+                    AskAi.secondOpinion => Icons.science_outlined,
+                  },
+                  size: 18,
+                ),
+                label: Text(flavour.isExperimental
+                    ? '${flavour.label} (experimental)'
+                    : flavour.label),
+                onPressed: () => _copy(
+                  context,
+                  askAiPrompt(
+                    flavour,
+                    info: info,
+                    manifest: manifest,
+                    layers: layers,
+                  ),
+                  'Prompt',
+                ),
+              ),
+            // For somebody who already knows what to ask and only wants the
+            // coordinates and citations to quote. Routing them through an AI to
+            // get facts the app already holds would be theatre.
+            TextButton.icon(
+              icon: const Icon(Icons.content_copy, size: 18),
+              label: const Text('Copy just the facts'),
+              onPressed: () => _copy(
+                context,
+                landFacts(info: info, manifest: manifest, layers: layers),
+                'Facts',
+              ),
+            ),
+          ],
+        ),
+        if (authority != null) ...[
+          const SizedBox(height: 10),
+          Text(
+            'The draft is addressed to ${authority.name} — '
+            '${authority.email}, ${authority.phone}, ${authority.hours}. '
+            'Ask for the answer in writing and keep it.',
+            style: small?.copyWith(color: Colors.black54, height: 1.35),
+          ),
+        ],
+        const SizedBox(height: 10),
+        const _Warning(
+          'An AI does not know the law and cannot make hunting legal. It will '
+          'sound certain when it is wrong, and the second opinion is the '
+          'flavour most likely to invent a regulation, which is why it is '
+          'marked experimental. Confirm anything that decides where you hunt '
+          'with the authority itself.',
+        ),
+      ],
+    );
+  }
+}
+
+/// What to call a feature on screen.
+///
+/// Top-level so the Ask-an-AI prompt names this parcel exactly as the card above
+/// it does. A prompt that called the same ground something else would break the
+/// one property that makes the question answerable, which is that the user, the
+/// AI and the ministry are all looking at the same parcel.
+String featureTitle(LandFeature feature, LoadedLayer? layer) =>
+    feature.layerId == 'wmu'
+        ? 'WMU ${feature.properties['wmu_id'] ?? feature.name ?? ''}'.trim()
+        : feature.name ??
+            layer?.defaultName ??
+            feature.layerId.replaceAll('_', ' ');
+
+/// Who owns a feature, where a source says so.
+///
+/// Null for a WMU, which is an administrative unit rather than a landholding: a
+/// unit boundary says nothing about who owns the ground inside it, and printing
+/// the layer's tenure string there would imply it did.
+String? tenureLabel(LandFeature feature, LoadedLayer? layer) {
+  if (feature.layerId == 'wmu') return null;
+  return switch (feature.ownerType) {
+    'county' => 'County forest — publicly owned',
+    'region' => 'Regional forest — publicly owned',
+    'municipal' => 'Municipal forest — publicly owned',
+    'conservation_authority' => 'Conservation authority forest',
+    _ => layer?.tenure,
+  };
+}
+
+/// Names a closure rather than just asserting one. A hunter who reads "no
+/// hunting" needs to know which authority to argue with, and a provincial game
+/// preserve, a federal wildlife area and a bird sanctuary send them three
+/// different places.
+String closureHeadline(LandFeature feature) => switch (feature.basis) {
+      'fwca_s9' => 'No hunting — Crown game preserve',
+      'fwca_s9_unconfirmed' => 'Crown game preserve — treat as no hunting',
+      'nwa_no_entry' => 'No entry — National Wildlife Area',
+      'nwa_closed' => 'No hunting — National Wildlife Area',
+      'mbs_closed' => 'No hunting, and no firearm — bird sanctuary',
+      'nwa_unverified' || 'mbs_unverified' =>
+        'Treat as closed — rules unconfirmed',
+      'dnd_closed' => 'No public hunting — defence property',
+      _ => 'No hunting here',
+    };
+
 /// A parcel's mapped extent, in the unit that reads at its size.
 ///
 /// Top-level so it can be tested, which it previously was not: the conversion
@@ -1052,22 +1209,6 @@ class _ClosureBanner extends StatelessWidget {
   final LandFeature feature;
   final LoadedLayer? layer;
 
-  /// Names the closure rather than just asserting one. A hunter who reads "no
-  /// hunting" needs to know which authority to argue with, and a provincial game
-  /// preserve, a federal wildlife area and a bird sanctuary send them three
-  /// different places.
-  String get _headline => switch (feature.basis) {
-        'fwca_s9' => 'No hunting — Crown game preserve',
-        'fwca_s9_unconfirmed' => 'Crown game preserve — treat as no hunting',
-        'nwa_no_entry' => 'No entry — National Wildlife Area',
-        'nwa_closed' => 'No hunting — National Wildlife Area',
-        'mbs_closed' => 'No hunting, and no firearm — bird sanctuary',
-        'nwa_unverified' || 'mbs_unverified' =>
-          'Treat as closed — rules unconfirmed',
-        'dnd_closed' => 'No public hunting — defence property',
-        _ => 'No hunting here',
-      };
-
   @override
   Widget build(BuildContext context) {
     const red = Color(0xFFB3261E);
@@ -1089,7 +1230,7 @@ class _ClosureBanner extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  _headline,
+                  closureHeadline(feature),
                   style: const TextStyle(
                     color: red,
                     fontWeight: FontWeight.w700,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:open_woods_map/data/models.dart';
 import 'package:open_woods_map/data/province_loader.dart';
@@ -66,6 +67,87 @@ void main() {
     await tester.tap(find.text('Save a waypoint here'));
     await tester.pumpAndSettle();
     expect(find.text('LAND INFO'), findsNothing);
+  });
+
+  group('handing the card to an AI', () {
+    Finder sheetScroller() => find
+        .descendant(
+          of: find.byType(ListView),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+
+    Future<void> tapInSheet(WidgetTester tester, String label) async {
+      final target = find.text(label);
+      await tester.scrollUntilVisible(target, 300, scrollable: sheetScroller());
+      // scrollUntilVisible stops as soon as the widget is in the tree, which
+      // can leave it below the viewport and unhittable. ensureVisible finishes
+      // the job.
+      await tester.ensureVisible(target);
+      await tester.pumpAndSettle();
+      await tester.tap(target);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('offers the three prompts and the facts on their own',
+        (tester) async {
+      await pumpSheet(tester, offerSave: false);
+      await tester.scrollUntilVisible(
+        find.text('ASK AN AI'),
+        300,
+        scrollable: sheetScroller(),
+      );
+      for (final label in [
+        'Explain these records',
+        'Draft an email to the authority',
+        'Get a second opinion (experimental)',
+        'Copy just the facts',
+      ]) {
+        expect(find.text(label), findsOneWidget);
+      }
+    });
+
+    testWidgets('copying puts the prompt on the clipboard', (tester) async {
+      final copied = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') {
+            copied.add((call.arguments as Map)['text'] as String);
+          }
+          return null;
+        },
+      );
+      addTearDown(() => tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null));
+
+      await pumpSheet(tester, offerSave: false);
+      await tapInSheet(tester, 'Copy just the facts');
+      expect(copied, hasLength(1));
+      expect(copied.single, contains('45.000000, -79.000000'));
+    });
+
+    // The bug this guards is invisible rather than broken: the app's own
+    // messenger lives above the Navigator, so a message raised from inside this
+    // modal sheet painted underneath it. The copy worked and the button looked
+    // dead. Finding the message under the sheet is what proves the sheet has a
+    // messenger of its own; findsOneWidget alone would pass either way.
+    testWidgets('and says so where the sheet can be seen', (tester) async {
+      tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, (_) async => null);
+      addTearDown(() => tester.binding.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null));
+
+      await pumpSheet(tester, offerSave: false);
+      await tapInSheet(tester, 'Copy just the facts');
+      expect(
+        find.descendant(
+          of: find.byType(BottomSheet),
+          matching: find.byType(SnackBar),
+        ),
+        findsOneWidget,
+      );
+    });
   });
 
   testWidgets('asks once', (tester) async {
