@@ -1350,12 +1350,20 @@ class _MapShellState extends State<MapShell> {
     showMessage(context, message);
   }
 
+  /// Hands the live map to the overlay controller, along with whatever the
+  /// installed pack carries.
+  ///
+  /// Runs even when there is nothing to draw, which is what a first launch with
+  /// no pack is. This is the only place the controller is given the map, and it
+  /// cannot draw before it has one, so bailing out here left a pack downloaded
+  /// minutes later with nowhere to go: its layers were remembered but never
+  /// added, and only a style reload put them on screen. From the outside that
+  /// reads as switching basemaps fixing the map.
   Future<void> _attachLayers() async {
     final map = _map;
-    final data = _provinceData;
-    if (!_styleReady || map == null || data == null) return;
+    if (!_styleReady || map == null) return;
     try {
-      await _overlays.attach(map, data.layers);
+      await _overlays.attach(map, _provinceData?.layers ?? const {});
     } catch (error) {
       if (mounted) setState(() => _error = 'Could not draw overlays: $error');
     }
