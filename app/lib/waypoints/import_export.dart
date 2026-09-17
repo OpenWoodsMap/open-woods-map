@@ -316,7 +316,16 @@ class WaypointImportExport {
       int.parse(hex.replaceAll('#', ''), radix: 16) & 0xFFFFFF;
 
   String toGeoJson(List<Waypoint> waypoints) =>
-      const JsonEncoder.withIndent('  ').convert({
+      const JsonEncoder.withIndent('  ').convert(geoJsonCollection(waypoints));
+
+  /// The FeatureCollection [toGeoJson] encodes, before it becomes text.
+  ///
+  /// Exposed so a backup can hang one more top-level member off the same
+  /// collection without this file having to know what a backup is. RFC 7946
+  /// section 6.1 permits such foreign members and requires a reader to ignore
+  /// the ones it does not understand, which is what lets a backup stay an
+  /// ordinary GeoJSON to every other tool.
+  Map<String, dynamic> geoJsonCollection(List<Waypoint> waypoints) => {
         'type': 'FeatureCollection',
         'features':
             waypoints
@@ -356,7 +365,7 @@ class WaypointImportExport {
                   },
                 )
                 .toList(),
-      });
+      };
 
   /// GeoJSON positions for a track, with altitude only when every point has it.
   ///

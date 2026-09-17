@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../backup/snapshot_store.dart';
 import '../data/models.dart';
 import '../data/province_loader.dart';
 import '../offline/basemap_area_store.dart';
@@ -62,7 +63,11 @@ class _MapShellState extends State<MapShell> {
 
   final _loader = ProvinceLoader();
   final _overlays = OverlayController();
-  final _waypoints = WaypointStore();
+  final _snapshots = SnapshotStore();
+
+  /// Late because the store takes the snapshot store, and an instance field
+  /// initialiser cannot see another instance field.
+  late final _waypoints = WaypointStore(snapshots: _snapshots);
   final _display = DisplaySettings();
   final _visibility = VisibilitySettings();
 

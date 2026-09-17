@@ -108,6 +108,23 @@ class TagStyleStore {
     await _save();
   }
 
+  /// Replaces every style at once, for a restore.
+  ///
+  /// Replaces rather than merges, because the backup is being treated as the
+  /// truth about what the user had. Merging would leave styling for tags the
+  /// restored file has never heard of, which is how a restore ends up producing
+  /// a state that never existed on any device.
+  ///
+  /// Empty styles are dropped on the way in, so a restore cannot fill the file
+  /// with tags that have no styling and undo what [styles] promises.
+  Future<void> replaceAll(Map<String, TagStyle> styles) async {
+    _styles = {
+      for (final entry in styles.entries)
+        if (!entry.value.isEmpty) entry.key: entry.value,
+    };
+    await _save();
+  }
+
   /// A top-level object, not a bare array, precisely because the waypoints file
   /// is a bare array and has no room to grow. `version` is here so a later
   /// build can tell what it is reading.

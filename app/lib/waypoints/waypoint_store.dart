@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../backup/snapshot_store.dart';
 import '../tracks/track_style.dart';
 import 'legacy_categories.dart';
 import 'waypoint_colour.dart';
@@ -258,6 +259,15 @@ String describeItemCount({required int points, required int tracks}) {
 }
 
 class WaypointStore {
+  /// Passed in rather than made here so that a test writing to a temporary
+  /// directory does not silently acquire a history it never asked about. The
+  /// app wires one up; anything exercising the store in isolation gets the
+  /// plain behaviour.
+  WaypointStore({this.snapshots});
+
+  /// Keeps copies of the state each save replaces, or null to keep none.
+  final SnapshotStore? snapshots;
+
   List<Waypoint> _items = [];
   List<Waypoint> get items => List.unmodifiable(_items);
 
@@ -291,20 +301,23 @@ class WaypointStore {
   }
 
   Future<void> add(Waypoint waypoint) async {
+    final before = _items;
     _items = [..._items, waypoint];
-    await _save();
+    await _save(before);
   }
 
   Future<void> update(Waypoint waypoint) async {
+    final before = _items;
     _items = [
       for (final item in _items) if (item.id == waypoint.id) waypoint else item,
     ];
-    await _save();
+    await _save(before);
   }
 
   Future<void> delete(String id) async {
+    final before = _items;
     _items = _items.where((item) => item.id != id).toList();
-    await _save();
+    await _save(before);
   }
 
   /// Every tag in use across the list, in first-seen order.
@@ -342,8 +355,9 @@ class WaypointStore {
   Future<List<Waypoint>> deleteWhere(bool Function(Waypoint) test) async {
     final removed = _items.where(test).toList();
     if (removed.isEmpty) return removed;
+    final before = _items;
     _items = _items.where((item) => !test(item)).toList();
-    await _save();
+    await _save(before);
     return removed;
   }
 
@@ -363,6 +377,7 @@ class WaypointStore {
         ids.contains(item.id) && item.tags.contains(tag);
     final changed = _items.where(affected).length;
     if (changed == 0) return 0;
+    final before = _items;
     _items = [
       for (final item in _items)
         if (affected(item))
@@ -372,16 +387,31 @@ class WaypointStore {
         else
           item,
     ];
-    await _save();
+    await _save(before);
     return changed;
   }
 
   Future<void> replaceAll(Iterable<Waypoint> waypoints) async {
+    final before = _items;
     _items = waypoints.toList();
-    await _save();
+    await _save(before);
   }
 
-  Future<void> _save() => storage.writeWaypointJson(
-        jsonEncode(_items.map((item) => item.toJson()).toList()),
-      );
+  Future<void> _save(List<Waypoint> before) async {
+    // The snapshot goes first, because what it preserves is the state this
+    // write is about to replace. Taking it afterwards would leave a window in
+    // which a process death destroys the old state and the copy of it together.
+    //
+    // And it is never allowed to fail the edit. History is a convenience; the
+    // waypoint the user just saved is not, so a full disk costs the snapshot
+    // rather than their work.
+    try {
+      await snapshots?.recordReplacement(before: before, after: _items);
+    } catch (_) {
+      // Deliberately swallowed. See above.
+    }
+    await storage.writeWaypointJson(
+      jsonEncode(_items.map((item) => item.toJson()).toList()),
+    );
+  }
 }

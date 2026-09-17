@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 
+import '../backup/backup_page.dart';
+import '../backup/backup_record.dart';
+import '../backup/snapshot_store.dart';
 import '../tracks/track_math.dart';
 import '../settings/visibility_settings.dart';
 import '../ui/messages.dart';
@@ -58,6 +61,7 @@ class _Section {
 class _WaypointsPageState extends State<WaypointsPage> {
   final _transfer = WaypointImportExport();
   final _tagStyles = TagStyleStore();
+  final _backups = BackupRecord();
   var _loading = true;
 
   /// The tags being filtered on. Empty means everything.
@@ -96,7 +100,11 @@ class _WaypointsPageState extends State<WaypointsPage> {
     widget.visibility.addListener(_onVisibilityChanged);
     // Styling loads alongside the waypoints and is allowed to fail quietly.
     // Nothing here depends on it: a tag with no style draws a plain label.
-    Future.wait([widget.store.load(), _tagStyles.load()]).then((_) {
+    Future.wait([
+      widget.store.load(),
+      _tagStyles.load(),
+      _backups.load(),
+    ]).then((_) {
       if (!mounted) return;
       setState(() => _loading = false);
       if (widget.store.unreadableFilePath case final path?) {
@@ -259,6 +267,31 @@ class _WaypointsPageState extends State<WaypointsPage> {
             tooltip: 'Actions for the whole list',
             icon: const Icon(Icons.more_vert),
             itemBuilder: (context) => [
+              PopupMenuItem(
+                onTap: _openBackups,
+                // The state of things is on the menu item rather than only on
+                // the screen behind it, because somebody who has never made a
+                // backup is exactly the person who never opens the backup
+                // screen. Said as a fact, and coloured only in the case where
+                // there is genuinely everything to lose.
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Backup & restore…'),
+                    const SizedBox(height: 2),
+                    Text(
+                      _backups.summary(widget.store.items.length),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: _backups.needsAttention(widget.store.items.length)
+                            ? Theme.of(context).colorScheme.error
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
               PopupMenuItem(
                 enabled: visible.isNotEmpty,
                 onTap: _deleteShown,
@@ -817,6 +850,29 @@ class _WaypointsPageState extends State<WaypointsPage> {
     if (edited == null) return;
     await widget.store.update(edited);
     if (mounted) setState(_pruneFilter);
+  }
+
+  /// Opens the backup screen, and takes the list back from it if it changed.
+  ///
+  /// Reached from the overflow rather than given a button of its own: it is the
+  /// screen you want twice a year, sitting beside the other whole-list actions
+  /// rather than competing with the ones used every time.
+  Future<void> _openBackups() async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BackupPage(
+          store: widget.store,
+          tagStyles: _tagStyles,
+          // The app hands the store a snapshot store of its own. Anything that
+          // built a bare store — a test — still gets a screen that backs up and
+          // restores; it simply has no history to show, which is the truth.
+          snapshots: widget.store.snapshots ?? SnapshotStore(),
+          record: _backups,
+        ),
+      ),
+    );
+    if (changed == true && mounted) setState(_pruneFilter);
   }
 
   /// Gives a tag an icon and a colour, or takes them away again.
