@@ -75,12 +75,28 @@ enough" is no comfort.
 
 ### What the app is allowed to claim
 
-It knows a file was produced. It does not know the file was kept. A backup sent
-to a chat and never opened again is indistinguishable here from one saved to a
-synced folder. So the screen may say *you have not made one in a while*, which is
-true, and must never say *your waypoints are safe*, which it cannot know. Putting
-the file somewhere that is not the phone is the user's part, and the page says so
-plainly instead of implying the copies on the phone are enough.
+It knows the share sheet reported that a target was chosen. It does not know the
+file was kept. A backup sent to a chat and never opened again is
+indistinguishable here from one saved to a synced folder. So the screen may say
+*you have not made one in a while*, which is true, and must never say *your
+waypoints are safe*, which it cannot know. Putting the file somewhere that is not
+the phone is the user's part, and the page says so plainly instead of implying
+the copies on the phone are enough.
+
+That ceiling is low, so the little the app does know has to be read rather than
+assumed. The first version recorded a backup as soon as the share sheet closed,
+whichever way it closed. Dismissing the chooser therefore produced *Last backup
+today, and nothing has changed since* over a file that had gone nowhere — the one
+screen whose job is to warn turned into one that reassured, and the stale-backup
+warning was switched off for the next 45 days. Only `ShareResultStatus.success`
+counts now. `unavailable`, which is desktop and web where the platform cannot
+report at all, deliberately does not: a build that keeps asking somebody who did
+make a backup is a nuisance, and a build that tells somebody they have one when
+they may not loses data.
+
+This one is worth remembering as a pattern rather than a bug. Nothing in the test
+suite could see it, because the thing being got wrong was a platform's answer
+that the tests were supplying themselves. It took ten minutes on a phone.
 
 ## Operating-system backup
 
@@ -94,24 +110,47 @@ This is worth knowing for two reasons, and neither is comfortable.
 **It is a privacy default nobody chose.** Hunting spots leave the phone for a
 Google account in an app built around having no accounts.
 
-**It is probably not working.** The quota is 25 MB per app, and exceeding it
-stops Auto Backup for that app silently. Two things in the same backed-up
-directory blow straight through it:
+**It was backing up the wrong things.** The quota is 25 MB per app, and exceeding
+it abandons the package rather than trimming it — Auto Backup simply stops for
+that app, and says nothing. The default backs up the whole data directory, which
+here meant two things that are a free download rather than the user's work:
 
 - `app_flutter/offline_packs/` — installed province packs, tens of megabytes.
-- `mbgl-offline.db` in the app's files directory — MapLibre's basemap tile store,
-  which can reach hundreds of megabytes.
+- `mbgl-offline.db` in the app's files directory — MapLibre's basemap tile store.
+  On the test phone, with no offline areas saved and only the ambient cache, this
+  alone was 52.7 MB: twice the entire quota.
 
-So anyone who has installed a pack has most likely had no OS backup at all, after
-their bandwidth was spent uploading files that are a free download from the
-Releases page.
+Both are now excluded, along with the app's own snapshots, which are copies of a
+file being backed up beside them. The rules live in
+`android/app/src/main/res/xml/backup_rules.xml` and `data_extraction_rules.xml`,
+which must agree — Android reads the first below API 31 and the second from 31 up.
+Each file says what is left out and why.
 
-**Open item.** The fix is directory-level exclusion, which is what the mechanism
-is for: *back up what the user made, never back up what we can fetch again.* It
-has not been written yet because a mis-named path in `dataExtractionRules` fails
-silently, and the exact backup domain for Flutter's documents directory needs
-checking on a device rather than guessing. Snapshots want excluding too — they
-are already copies of a file being backed up beside them.
+They are written as **excludes rather than includes** on purpose. A wrong path in
+an exclude leaves the backup oversized, which is loud. A wrong path in an include
+leaves a backup that succeeds while holding none of the user's waypoints, and
+nothing reports that until the day of a restore.
+
+Measured on a device afterwards, with both provinces installed and 99 waypoints
+and tracks, the whole backup was 239 KB — 232 KB of it the waypoints file, the
+rest shared preferences. Redo that check with:
+
+```powershell
+adb shell bmgr transport com.android.localtransport/.LocalTransport
+adb logcat -c
+adb shell bmgr backupnow ca.openwoodsmap.open_woods_map
+adb logcat -d | Select-String FullBackup_native
+adb shell bmgr transport com.google.android.gms/.backup.BackupTransportService
+```
+
+Ask the **local** transport, not Google's. It runs the agent and logs every path
+it measures, so the exclusions show up as absences in a list of real paths — which
+is also how the backup domain for Flutter's documents directory was confirmed to
+be `root` + `app_flutter/`, rather than assumed. Google's transport answers
+`Transport rejected package because it wasn't able to process it at the time` on a
+side-loaded build without starting the agent at all; that is a refusal to talk,
+not a verdict on size, and it is easy to misread as these rules failing. Put the
+transport back when you are done, it is a device-wide setting.
 
 Note what excluding **tracks** would take, since it looks like the obvious lever
 and is not: exclusion works per file, not per record, and tracks share
