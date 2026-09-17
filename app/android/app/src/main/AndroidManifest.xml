@@ -4,10 +4,19 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <!-- Backup stays on, but scoped. The default backs up the whole data
+         directory, which here means the installed province packs and the offline
+         basemap tile store: tens to hundreds of megabytes the user can
+         re-download for free, against a 25 MB quota that abandons the backup
+         rather than trimming it. The two files below say what is left out and
+         why. fullBackupContent is read below Android 12, dataExtractionRules
+         from 12 up, and they have to agree. -->
     <application
         android:label="OpenWoodsMap"
         android:name="${applicationName}"
         android:networkSecurityConfig="@xml/network_security_config"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"

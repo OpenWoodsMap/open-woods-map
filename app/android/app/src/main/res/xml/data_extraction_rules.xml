@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12 and later, via android:dataExtractionRules. Android 11 and earlier
+  read res/xml/backup_rules.xml, which must say the same thing.
+
+  See backup_rules.xml for why each of these is excluded. The short version is
+  that none of it is the user's work: packs and basemap tiles are free downloads
+  from the Releases page and from the tile servers, and the snapshots are copies
+  of a file that is itself being backed up.
+
+  Both destinations get the same list. Cloud backup has a 25 MB quota it would
+  blow instantly. Device transfer has no quota, but moving hundreds of megabytes
+  of re-downloadable map tiles over a cable to save one download is not a
+  kindness to somebody standing there waiting for a new phone.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" path="app_flutter/offline_packs" />
+        <exclude domain="root" path="app_flutter/snapshots" />
+        <exclude domain="file" path="mbgl-offline.db" />
+        <exclude domain="file" path="mbgl-offline.db-wal" />
+        <exclude domain="file" path="mbgl-offline.db-shm" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" path="app_flutter/offline_packs" />
+        <exclude domain="root" path="app_flutter/snapshots" />
+        <exclude domain="file" path="mbgl-offline.db" />
+        <exclude domain="file" path="mbgl-offline.db-wal" />
+        <exclude domain="file" path="mbgl-offline.db-shm" />
+    </device-transfer>
+</data-extraction-rules>

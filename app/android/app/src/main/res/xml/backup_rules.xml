@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 and earlier, via android:fullBackupContent. Android 12 and later
+  read res/xml/data_extraction_rules.xml instead, and the two must say the same
+  thing.
+
+  The rule: back up what the user made, never back up what we can fetch again.
+
+  Left in, because it is the only irreplaceable data in the app and it is small:
+    app_flutter/open_woods_map_waypoints.json   waypoints and recorded tracks
+    app_flutter/open_woods_map_tag_styles.json  tag colours and icons
+    shared_preferences                          settings, installed pack ids
+
+  Taken out below. Every one of these is a free download from the Releases page
+  or from a tile server, and together they run to tens or hundreds of megabytes
+  against Auto Backup's 25 MB quota. Exceeding that quota does not trim the
+  backup, it abandons the package: the app stops being backed up, and nothing
+  tells the user, after their bandwidth has gone on uploading an offline map they
+  already have.
+
+  Excludes rather than includes on purpose. A wrong path here leaves the backup
+  oversized, which is loud — see below. A wrong include would leave a backup that
+  succeeds while holding none of the user's waypoints, and nothing would report
+  that until the day of a restore.
+
+  To check this on a device, which is the only way to know it still holds:
+
+    adb shell bmgr transport com.android.localtransport/.LocalTransport
+    adb logcat -c
+    adb shell bmgr backupnow ca.openwoodsmap.open_woods_map
+    adb logcat -d | Select-String FullBackup_native
+    adb shell bmgr transport com.google.android.gms/.backup.BackupTransportService
+
+  The local transport is the one worth asking. It runs the agent and logs every
+  path it measures, so the exclusions are visible as absences in a list. Google's
+  transport answers "Transport rejected package because it wasn't able to process
+  it at the time" on a debug-signed or side-loaded build without ever starting the
+  agent, which is a refusal to talk rather than a verdict on size — do not read it
+  as this file failing. Put the transport back afterwards; it is a device-wide
+  setting.
+-->
+<full-backup-content>
+    <!-- Installed province packs: overlays, policies, seasons, gazetteer. -->
+    <exclude domain="root" path="app_flutter/offline_packs" />
+
+    <!-- The app's own rolling copies of the waypoints file. Backing up a backup
+         multiplies the upload by however many are kept, to protect copies of a
+         file being backed up beside them. -->
+    <exclude domain="root" path="app_flutter/snapshots" />
+
+    <!-- MapLibre's offline basemap tile store, which alone can reach hundreds
+         of megabytes. Named one by one because a backup path matches a file or
+         a directory and the SQLite sidecars are neither inside the other. -->
+    <exclude domain="file" path="mbgl-offline.db" />
+    <exclude domain="file" path="mbgl-offline.db-wal" />
+    <exclude domain="file" path="mbgl-offline.db-shm" />
+</full-backup-content>
