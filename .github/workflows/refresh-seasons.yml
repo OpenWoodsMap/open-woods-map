@@ -7,6 +7,11 @@
 # Schedule: mid-March, when the new summary is published, and again on 1 August
 # as a backstop before the fall season.
 # On-demand: Actions -> Refresh hunting seasons -> Run workflow
+#
+# Opening a pull request needs "Allow GitHub Actions to create and approve pull
+# requests" under Settings -> Actions -> General. Without it the scrape succeeds,
+# the branch is pushed, and only the last step fails — which is how this went
+# unnoticed until somebody ran it on purpose.
 
 name: Refresh hunting seasons
 
@@ -67,6 +72,30 @@ jobs:
           cat scrape.log >> "$GITHUB_OUTPUT"
           echo 'EOF' >> "$GITHUB_OUTPUT"
           rm scrape.log
+
+      # The scraper stamps `generated` on every run, so an unchanged summary still
+      # leaves a diff and still opened a pull request. That is worse than noise: a
+      # reviewer who has waved through four one-line date bumps is a reviewer who
+      # waves through the fifth, and the fifth is the one that moves the opening
+      # day of a season. The point of sending these to a human is lost if most of
+      # them say nothing.
+      #
+      # The cost, stated plainly: `generated` stays at the last date the content
+      # actually changed, and the Seasons tab shows it as "read <date>", so the app
+      # will understate when the summary was last checked. That claim stays true —
+      # it was read then and did say this — and erring toward looking older than we
+      # are is the safe direction for a freshness signal.
+      - name: Discard a re-scrape that only moved the date
+        run: |
+          set -euo pipefail
+          CHANGED="$(git diff -U0 -- data/on/seasons \
+            | grep -E '^[+-][^+-]' \
+            | grep -v '"generated"' || true)"
+          if [ -n "$(git status --porcelain -- data/on/seasons)" ] \
+             && [ -z "$CHANGED" ]; then
+            echo "Summary unchanged; only the generated stamp moved. Discarding."
+            git checkout -- data/on/seasons
+          fi
 
       - name: Open pull request
         uses: peter-evans/create-pull-request@v7
