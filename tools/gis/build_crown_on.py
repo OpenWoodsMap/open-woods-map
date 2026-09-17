@@ -35,9 +35,11 @@ from pathlib import Path
 from shapely.geometry import mapping, shape
 from shapely.ops import transform
 from shapely.strtree import STRtree
-from shapely.validation import make_valid
 
-from geomutil import polygonal
+# valid() was a local copy of geomutil's until one parcel made GEOS abort inside
+# it. Two identical repairs meant only one of them got hardened, so this file now
+# uses the shared one and there is a single place to fix.
+from geomutil import polygonal, valid
 
 csv.field_size_limit(10_000_000)
 
@@ -84,12 +86,6 @@ WATER_FRACTION = 0.9
 
 def load_geojson(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def valid(geom):
-    if not geom.is_valid:
-        geom = make_valid(geom)
-    return geom
 
 
 def quantize(geom, decimals: int):

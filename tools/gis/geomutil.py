@@ -9,6 +9,8 @@ and spend the savings on detail nobody needs instead.
 
 from __future__ import annotations
 
+import shapely
+from shapely.errors import GEOSException
 from shapely.geometry import MultiPolygon, Polygon, mapping, shape
 from shapely.ops import unary_union
 from shapely.validation import make_valid
@@ -83,7 +85,32 @@ def quantized_valid(geometry, digits: int = 5, label: str | None = None) -> dict
 def valid(geometry):
     if geometry.is_valid:
         return geometry
-    return make_valid(geometry)
+    try:
+        return make_valid(geometry)
+    except GEOSException:
+        # GEOS repairs from the linework by default, and on a parcel whose rings
+        # have been rounded or simplified until some of them collapse it can hand
+        # its own overlay a mixture of lines and polygons and give up:
+        # "IllegalArgumentException: Overlay input is mixed-dimension". One parcel
+        # out of Ontario's 59,917 did that and took the whole monthly rebuild down
+        # with it, both provinces, six minutes into the run.
+        #
+        # The structure method builds the result from polygon interiors instead,
+        # so a collapsed ring has no area to contribute and keep_collapsed=False
+        # drops it rather than handing back a line. That is the same call
+        # polygonal() below already makes and defends: the polygons are ground the
+        # province mapped, the slivers are an artefact of our own arithmetic.
+        #
+        # Only reached where the line above would have raised, so nothing that
+        # builds correctly today is repaired differently tomorrow.
+        return shapely.make_valid(
+            geometry, method="structure", keep_collapsed=False
+        )
+        # Deliberately no third attempt. If the structure method fails too, the
+        # geometry is beyond our repair, and quietly dropping a Crown parcel would
+        # leave the app showing no record over ground the province does hold —
+        # which is a wrong answer about where a rifle may be fired, arrived at
+        # silently. A failed run that a person reads is the better outcome.
 
 
 def usable(geometry) -> bool:

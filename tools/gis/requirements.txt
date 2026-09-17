@@ -1,4 +1,6 @@
 pyshp>=2.3.0
 pyproj>=3.6.0
 requests>=2.31.0
-shapely>=2.0.0
+# 2.1 for make_valid's structure method, which geomutil.valid falls back to when
+# GEOS refuses to repair a rounded parcel from its linework.
+shapely>=2.1.0
