@@ -27,7 +27,16 @@ Follow attribute expectations in [datasets.md](datasets.md) for Land Info. Build
 - Workflow: `.github/workflows/rebuild-geometry-packs.yml` (monthly + manual).
 - Entry script: `tools/gis/rebuild_geometry.py --pack`
 - Download URL tag: `packs-latest` (see `packUrl` in `data/provinces.json`).
-- Seasons/policies are **not** auto-scraped; refresh with `.agents/skills/refresh-seasons-policies` then re-pack.
+- Policies **are** rebuilt by a geometry run, from the CLUPAPRO download.
+- Seasons are **not** rebuilt here. They come from `data/{cc}/seasons/*.json` as
+  committed, so a pack published by this workflow carries whatever is in the repo
+  at the time. `.github/workflows/refresh-seasons.yml` re-scrapes them on its own
+  schedule and opens a PR rather than pushing, because hunters act on these dates
+  and a human checks the diff against the official tables first. Merge that, then
+  re-pack. Or drive both by hand with `.agents/skills/refresh-seasons-policies`.
+- Neither schedule had ever actually run until they were dispatched by hand, and
+  both turned out to be broken. [datasets.md](datasets.md) records how, and why a
+  schedule nobody has fired is an untested code path.
 
 ## Data in git
 

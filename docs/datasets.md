@@ -1041,3 +1041,31 @@ Geometry packs refresh monthly via Actions (`packs-latest`). Seasons are re-scra
 by the **Refresh hunting seasons** workflow, which opens a PR rather than pushing:
 hunters act on these dates, so a human checks the diff against the official tables
 first. See the `refresh-seasons-policies` skill.
+
+### Both of these were broken, and nothing said so
+
+Worth reading before trusting either schedule again. On 17 September 2026 the
+repository's entire Actions history was `Release APK` and nothing else: neither
+data workflow had ever run, not once, so neither had ever been proved to work.
+Dispatching them by hand found both broken, in different ways.
+
+The seasons scrape failed on its last step with *GitHub Actions is not permitted
+to create or approve pull requests*, a repository setting that is off by default
+and lives outside the workflow file. Everything before it worked, so the branch
+was pushed and only the pull request was missing. Its first scheduled attempt
+would have been 15 March 2027, and the August backstop would have failed the same
+way, meaning the app could have carried a year-old set of season dates while two
+green-looking schedules said otherwise.
+
+The geometry rebuild died six minutes in, on one parcel out of Ontario's 59,917,
+with `GEOSException: Overlay input is mixed-dimension` from inside `make_valid`.
+Not a dependency drift — the runner and the developer machine were both on shapely
+2.1.2 — so it was live source data reaching a path that rounding makes degenerate,
+and it took both provinces down with it. `geomutil.valid` now falls back to
+`make_valid`'s structure method for exactly that case.
+
+Two lessons, both cheap to act on. A schedule that has never fired is an untested
+code path, so dispatch a new one by hand the day you write it rather than finding
+out months later. And a failure this far from anybody's attention needs to be
+looked for on purpose: a monthly rebuild that quietly stops is indistinguishable,
+from inside the app, from a province where nothing has changed.
