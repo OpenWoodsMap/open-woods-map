@@ -103,7 +103,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: province-overlay-packs
-          path: packs/*-overlays.zip
+          # packs.json as well as the zips, because it carries each pack's
+          # content_id. Without it a run with publishing off can say the build
+          # succeeded but not whether anything actually changed, which is the
+          # question a dry run is usually being asked.
+          path: |
+            packs/*-overlays.zip
+            packs/packs.json
           if-no-files-found: error
           retention-days: 30
 
