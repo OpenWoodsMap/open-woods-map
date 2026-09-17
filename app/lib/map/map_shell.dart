@@ -25,6 +25,7 @@ import '../tracks/track_layers.dart';
 import '../tracks/track_math.dart';
 import '../tracks/track_style.dart';
 import '../ui/messages.dart';
+import '../waypoints/undo.dart';
 import '../waypoints/waypoint_card.dart';
 import '../waypoints/waypoint_icon.dart';
 import '../waypoints/waypoint_editor.dart';
@@ -2223,6 +2224,13 @@ class _MapShellState extends State<MapShell> {
   }
 
   Future<void> _showWaypoints() async {
+    // A snackbar outlives the route that raised it, so a delete's UNDO from the
+    // map card followed the user onto this list. The store is not listenable and
+    // the list holds its own copy, so tapping that UNDO here would put the
+    // waypoint back on disk and leave the screen exactly as it was — an undo that
+    // reads as having done nothing, which is the moment somebody decides the app
+    // has eaten their data. Leaving the map ends the offers made on it.
+    ScaffoldMessenger.of(context).clearSnackBars();
     final request = await Navigator.push<WaypointsRequest>(
       context,
       MaterialPageRoute(
@@ -2275,6 +2283,8 @@ class _MapShellState extends State<MapShell> {
           setState(() => _followTrack = edited);
           await _syncFollowSource();
         }
+      case DeleteFromCard(waypoint: final subject):
+        await _deleteFromCard(subject);
       case FollowFromCard(:final track, :final reversed):
         await _startFollowing(track, reversed: reversed);
       case LandInfoFromCard():
@@ -2288,6 +2298,38 @@ class _MapShellState extends State<MapShell> {
           coordinates,
         );
     }
+  }
+
+  /// Deletes what the user just tapped, offering the same undo the list does.
+  ///
+  /// [restoreDeleted] rather than putting back a snapshot of the whole list. An
+  /// undo that replays everything as it was would also silently revert whatever
+  /// happened in between, and this snackbar can be sitting on screen while a track
+  /// is being recorded — see undo.dart, which exists because that once lost data.
+  Future<void> _deleteFromCard(Waypoint waypoint) async {
+    // The order things were in, not the state to go back to.
+    final before = _waypoints.items.toList();
+    // A follow bar pointing along a track that no longer exists is guidance
+    // towards nothing, so the walk ends with the thing being walked.
+    if (_followTrack?.id == waypoint.id) await _stopFollowing();
+    await _waypoints.delete(waypoint.id);
+    await _syncWaypointSource();
+    if (!mounted) return;
+    showMessage(
+      context,
+      'Deleted ${waypoint.name}.',
+      actionLabel: 'UNDO',
+      onAction: () async {
+        await _waypoints.replaceAll(
+          restoreDeleted(
+            current: _waypoints.items,
+            before: before,
+            removed: [waypoint],
+          ),
+        );
+        await _syncWaypointSource();
+      },
+    );
   }
 
   /// Saves a waypoint at a spot on the map, wherever the ask came from.

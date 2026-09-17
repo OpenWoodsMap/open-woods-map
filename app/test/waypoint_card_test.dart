@@ -113,6 +113,47 @@ void main() {
         isA<LandInfoFromCard>(),
       );
     });
+
+    // Deleting was deliberately kept off this card at first, on the reasoning that
+    // a map tap was too short a distance for something irreversible. What settled
+    // it is that the map raises the same UNDO the list does, so the distance is no
+    // longer the only thing standing between a stray thumb and a lost waypoint.
+    testWidgets('asks to delete the waypoint that was tapped', (tester) async {
+      final waypoint = _point();
+      final request = await open(tester, waypoint, tap: 'Delete');
+      expect(request, isA<DeleteFromCard>());
+      expect((request! as DeleteFromCard).waypoint.id, waypoint.id);
+    });
+
+    // Not a neighbour of Edit that a wide thumb finds by accident. Its colour and
+    // its position are the only warning a one-tap destructive button gets, so both
+    // are worth holding still.
+    testWidgets('sets delete apart from the actions that are safe',
+        (tester) async {
+      await open(tester, _point());
+
+      Color? foregroundOf(String label) => tester
+          .widget<ButtonStyleButton>(
+            find.ancestor(
+              of: find.text(label),
+              matching: find.byType(TextButton),
+            ),
+          )
+          .style
+          ?.foregroundColor
+          ?.resolve(const {});
+
+      // The safe actions take the theme's own colour, so overriding delete's is
+      // what makes it look different rather than merely being different.
+      expect(foregroundOf('Land info'), isNull);
+      expect(foregroundOf('Delete'), isNotNull);
+
+      expect(
+        tester.getCenter(find.text('Delete')).dx,
+        greaterThan(tester.getCenter(find.text('Edit')).dx),
+        reason: 'delete should not sit between the safe actions',
+      );
+    });
   });
 
   group('a track tapped on the map', () {

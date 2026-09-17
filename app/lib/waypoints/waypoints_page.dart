@@ -558,6 +558,10 @@ class _WaypointsPageState extends State<WaypointsPage> {
   }
 
   Widget _list(List<Object> rows) => ListView.builder(
+    // Room to scroll the last row out from under the add button, which otherwise
+    // sits on top of its overflow menu — so the one item you could never rename,
+    // delete or hide was whichever one happened to be last.
+    padding: const EdgeInsets.only(bottom: 88),
     itemCount: rows.length,
     itemBuilder: (context, index) => switch (rows[index]) {
       _Section(:final tag, :final count) => _header(tag, count),

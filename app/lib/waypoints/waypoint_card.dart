@@ -22,6 +22,12 @@ final class FollowFromCard extends WaypointCardRequest {
   final bool reversed;
 }
 
+final class DeleteFromCard extends WaypointCardRequest {
+  const DeleteFromCard(this.waypoint);
+
+  final Waypoint waypoint;
+}
+
 /// Ask for Land Info at the spot that was tapped rather than about the track.
 ///
 /// Exists because a track's line and markers are a wide target, so making a tap
@@ -135,11 +141,28 @@ class _WaypointCard extends StatelessWidget {
                 icon: const Icon(Icons.travel_explore),
                 label: const Text('Land info'),
               ),
+              // Deleting used to be kept off this card, on the reasoning that undo
+              // lived in the list and a map tap was too short a distance for
+              // something irreversible. Half of that was wrong: the person tapping
+              // is looking straight at the thing they mean, which is a better
+              // target than a name in a list of ninety. The other half is answered
+              // by the map raising the same UNDO the list does, rather than by
+              // making them go and find the row.
+              //
+              // Last in the row and the only button in the error colour, so it is
+              // not a neighbour of Edit that a wide thumb finds by accident.
+              TextButton.icon(
+                onPressed: () =>
+                    Navigator.pop(context, DeleteFromCard(waypoint)),
+                style: TextButton.styleFrom(
+                  foregroundColor: theme.colorScheme.error,
+                ),
+                icon: const Icon(Icons.delete_outline),
+                label: const Text('Delete'),
+              ),
             ],
           ),
         ),
-        // Deleting stays in the list, where the undo and the whole-category
-        // sweep already live. One tap from the map is the wrong distance for it.
       ],
     );
   }
