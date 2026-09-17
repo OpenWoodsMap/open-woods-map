@@ -4,6 +4,8 @@
 # season tables on ontario.ca. The result is never pushed straight to main:
 # hunters act on these dates, so a human reviews the diff first.
 #
+# Schedule: mid-March, when the new summary is published, and again on 1 August
+# as a backstop before the fall season.
 # On-demand: Actions -> Refresh hunting seasons -> Run workflow
 
 name: Refresh hunting seasons
@@ -19,6 +21,13 @@ on:
   schedule:
     # Mid-March, after Ontario publishes the updated summary for the new year.
     - cron: "0 14 15 3 *"
+    # And again before the fall season, because one run a year is one chance a
+    # year. A March run that failed, or that ran before Ontario published, is
+    # otherwise not noticed until somebody is reading dates they intend to hunt
+    # on. Both runs target the same regulation year, so this is a re-scrape
+    # rather than a different question: if March already landed and nothing has
+    # changed since, it opens nothing.
+    - cron: "0 14 1 8 *"
 
 permissions:
   contents: write
