@@ -322,6 +322,43 @@ void main() {
         'Last',
       ]);
     });
+
+    // A SnackBar outlives the route that raised it, so this offer followed the
+    // user onto the backup screen and sat under its snapshot Restore buttons.
+    // The clutter was the smaller half: it stayed tappable after a restore had
+    // replaced the whole list, which would have put a waypoint back into a list
+    // it had never been deleted from.
+    testWidgets('the undo does not follow the user to the backup screen', (
+      tester,
+    ) async {
+      final store = await stockedWith(tester, [
+        point('1', 'First'),
+        point('2', 'Middle'),
+      ]);
+
+      await pumpPage(tester, store);
+      await tester.tap(
+        find.descendant(
+          of: find.widgetWithText(ListTile, 'Middle'),
+          matching: find.byTooltip('More'),
+        ),
+      );
+      await settle(tester);
+      await tester.tap(find.text('Delete').last);
+      await settle(tester, until: find.text('UNDO'));
+
+      // Asserted before navigating, so the expectation below cannot be met by a
+      // SnackBar that had simply timed out on its own four seconds.
+      expect(find.text('UNDO'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Actions for the whole list'));
+      await settle(tester);
+      await tester.tap(find.text('Backup & restore…'));
+      await settle(tester);
+
+      expect(find.text('Backup & restore'), findsOneWidget);
+      expect(find.text('UNDO'), findsNothing);
+    });
   });
 
   group('an unreadable file', () {

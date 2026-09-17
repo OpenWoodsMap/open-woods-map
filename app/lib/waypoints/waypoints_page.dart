@@ -858,6 +858,13 @@ class _WaypointsPageState extends State<WaypointsPage> {
   /// screen you want twice a year, sitting beside the other whole-list actions
   /// rather than competing with the ones used every time.
   Future<void> _openBackups() async {
+    // A snackbar outlives the route that raised it, so a delete's UNDO followed
+    // this screen and sat directly under the snapshot Restore buttons: two ways
+    // back side by side, one of them silently expiring. Worse than the clutter,
+    // it stayed tappable after a restore had replaced the whole list, which
+    // would have put a waypoint back into a list it was never deleted from.
+    // Leaving the list therefore ends the offers made about it.
+    ScaffoldMessenger.of(context).clearSnackBars();
     final changed = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
