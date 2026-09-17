@@ -73,6 +73,29 @@ void main() {
     expect(tester.getTopLeft(find.text('Basemap')), headerBefore);
   });
 
+  // This panel is the only place the hints appear now. They used to be printed
+  // permanently over the map as well, which was the same words about a basemap the
+  // person had already picked. Removing that left one copy, and it is the copy
+  // that has to survive: "needs network" is what explains a blank satellite view
+  // out of signal, and it is only readable here.
+  testWidgets('each basemap says what it is and what it needs', (tester) async {
+    await pumpPanel(tester, const Size(1080, 2400));
+
+    for (final kind in BasemapKind.values) {
+      expect(find.text(kind.shortHint), findsOneWidget,
+          reason: '${kind.label} should explain itself');
+    }
+    expect(
+      find.textContaining('needs network'),
+      findsNWidgets(
+        BasemapKind.values
+            .where((kind) => kind.shortHint.contains('needs network'))
+            .length,
+      ),
+      reason: 'the basemaps that need a connection have to say so somewhere',
+    );
+  });
+
   testWidgets('a tall screen does not force a full-height sheet',
       (tester) async {
     await pumpPanel(tester, const Size(1080, 2400));

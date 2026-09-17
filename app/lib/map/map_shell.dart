@@ -32,6 +32,7 @@ import '../waypoints/waypoint_store.dart';
 import '../waypoints/waypoints_page.dart';
 import 'basemap.dart';
 import 'basemap_panel.dart';
+import 'fix_accuracy.dart';
 import 'land_info.dart';
 import 'land_info_sheet.dart';
 import 'layer_panel.dart';
@@ -132,6 +133,13 @@ class _MapShellState extends State<MapShell> {
   final Map<BasemapKind, String> _styleCache = {};
   int _mapEpoch = 0;
   bool _locating = false;
+
+  /// Whether a fix is being taken for a waypoint at the user's position.
+  ///
+  /// Separate from [_locating] because both buttons ask the GPS the same question
+  /// and sharing the flag would spin them together, saying two things are
+  /// happening when one is.
+  bool _savingHere = false;
   bool _recording = false;
   bool _needsPack = false;
   bool _showLandInfoTip = false;
@@ -656,6 +664,24 @@ class _MapShellState extends State<MapShell> {
                     )
                     : const Icon(Icons.my_location),
           ),
+          // Bottom of the column, so the two buttons about where you are sit
+          // together and the commonest one is the easiest to reach with a thumb.
+          // A person icon rather than another pin: everything else that makes a
+          // waypoint is about a place on the map, and this one is about you.
+          const SizedBox(height: 10),
+          FloatingActionButton(
+            heroTag: 'here',
+            tooltip: 'Save a waypoint where I am',
+            onPressed: _savingHere ? null : _saveWaypointHere,
+            child:
+                _savingHere
+                    ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : const Icon(Icons.person_pin_circle),
+          ),
         ],
       ),
       body: Stack(
@@ -901,20 +927,19 @@ class _MapShellState extends State<MapShell> {
                 ),
               ),
             ),
-          Positioned(
-            left: 8,
-            bottom: 6,
-            child: DecoratedBox(
-              decoration: const BoxDecoration(color: Color(0xCCFFFBF0)),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                child: Text(
-                  _basemap.shortHint,
-                  style: const TextStyle(fontSize: 10),
-                ),
-              ),
-            ),
-          ),
+          // The basemap's hint used to sit here permanently. It is not the
+          // attribution — MapLibre draws that from the style's own `attribution`
+          // fields, and that stays. This was a description of the basemap you had
+          // already chosen, printed over the map you were trying to read, and it
+          // says the same words as the subtitle in the basemap picker, which is
+          // where somebody choosing between them is actually looking.
+          //
+          // The half worth keeping was "needs network", which explains a blank
+          // satellite view when there is no signal. That is now only a tap away in
+          // the picker rather than always on screen. Showing it exactly when tiles
+          // fail would be better than either, but the MapLibre Flutter binding does
+          // not report tile load failures, so the choice was always-on or in the
+          // picker.
         ],
       ),
     );
@@ -2269,16 +2294,19 @@ class _MapShellState extends State<MapShell> {
   ///
   /// Reachable from a long press and from Land Info, because those are the two
   /// moments someone is already looking at the place they want to keep. Going to
-  /// the waypoint list and pressing "Add here" saves the *camera centre*, which
-  /// means panning the thing you care about into the middle of the screen first —
-  /// four steps to record a spot you had already pointed at.
-  Future<void> _saveWaypointAt(LatLng coordinates) async {
+  /// the waypoint list and pressing its add button saves the *camera centre*,
+  /// which means panning the thing you care about into the middle of the screen
+  /// first — four steps to record a spot you had already pointed at.
+  ///
+  /// [note] pre-fills the editor's notes. Used by [_saveWaypointHere] to carry
+  /// how rough the fix was, where that is worth saying.
+  Future<void> _saveWaypointAt(LatLng coordinates, {String note = ''}) async {
     final draft = Waypoint(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       name: 'Waypoint',
       latitude: coordinates.latitude,
       longitude: coordinates.longitude,
-      notes: '',
+      notes: note,
       createdAt: DateTime.now(),
     );
     final saved = await showWaypointEditor(
@@ -2292,6 +2320,45 @@ class _MapShellState extends State<MapShell> {
     await _syncWaypointSource();
     if (!mounted) return;
     showMessage(context, 'Saved ${saved.name}.');
+  }
+
+  /// Saves a waypoint where the phone says you are, not where the map is looking.
+  ///
+  /// That distinction is the whole button. Every other way to make a waypoint
+  /// takes a spot on the map — a long press, Land Info, the list's camera-centre
+  /// button — so the commonest thing anyone wants outdoors, marking the ground
+  /// under their feet, was the one path that went through panning and squinting.
+  ///
+  /// A fresh fix rather than [_lastPosition], which only exists while recording or
+  /// following and is otherwise absent or minutes stale. A waypoint is a claim
+  /// about where somebody stood; one taken from an old fix is a claim about where
+  /// they stood earlier, and it would look identical afterwards.
+  ///
+  /// Deliberately no fall back to the camera centre when there is no fix. Saving
+  /// the middle of the screen and calling it your position is the one outcome
+  /// worse than saving nothing, because nothing about the result would admit it.
+  Future<void> _saveWaypointHere() async {
+    setState(() => _savingHere = true);
+    try {
+      if (!await _ensureLocationPermission('save a waypoint where you are')) {
+        return;
+      }
+      await _enableMyLocationPuck();
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+      if (!mounted) return;
+      await _saveWaypointAt(
+        LatLng(position.latitude, position.longitude),
+        note: accuracyNote(position.accuracy),
+      );
+    } catch (error) {
+      _toast('Could not get location: $error');
+    } finally {
+      if (mounted) setState(() => _savingHere = false);
+    }
   }
 
   /// Puts a saved waypoint or track on screen after the list hands one back.

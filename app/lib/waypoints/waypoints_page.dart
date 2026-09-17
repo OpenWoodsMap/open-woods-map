@@ -305,10 +305,14 @@ class _WaypointsPageState extends State<WaypointsPage> {
           ),
         ],
       ),
+      // Not "Add here". This saves the camera centre of a map that is not even on
+      // screen, and "here" reads as where the person is standing — which the map
+      // now has its own button for. Two actions a hundred metres apart should not
+      // share a word.
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _add,
         icon: const Icon(Icons.add_location_alt),
-        label: const Text('Add here'),
+        label: const Text('Add at map centre'),
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())

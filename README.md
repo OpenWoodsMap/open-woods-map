@@ -78,7 +78,9 @@ Build a sideload APK: [docs/android_apk.md](docs/android_apk.md).
   deer activity graph — an openly documented heuristic, not a prediction, with
   the reasons behind every hour shown and moon phase deliberately left out. The
   only feature that needs a connection
-- Waypoints + GPS track recording; GPX / KML / GeoJSON import-export
+- Waypoints + GPS track recording; GPX / KML / GeoJSON import-export. One button
+  marks where you are standing, from a fresh fix rather than wherever the map
+  happens to be pointing, and says so in the note when the fix was a rough one
 - **Backup & restore:** the app keeps rolling copies of your list on the phone
   so a bulk delete or a bad import is recoverable long after the undo has gone,
   and makes a complete backup file you can put wherever you like. The file is
