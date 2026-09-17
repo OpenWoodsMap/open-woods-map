@@ -78,8 +78,9 @@ class _BackupPageState extends State<BackupPage> {
       createdAt: now,
     );
     final date = now.toIso8601String().split('T').first;
+    final ShareResult shared;
     try {
-      await SharePlus.instance.share(
+      shared = await SharePlus.instance.share(
         ShareParams(
           files: [
             XFile.fromData(utf8.encode(text), mimeType: 'application/geo+json'),
@@ -92,9 +93,29 @@ class _BackupPageState extends State<BackupPage> {
       if (mounted) showMessage(context, 'Could not share the backup: $error');
       return;
     }
-    // Recorded on the strength of having produced the file, which is all this
-    // can honestly know. Where it went, and whether it is still there, is the
-    // user's business and beyond the app's sight.
+    // The status has to be read, not assumed. Recording unconditionally meant
+    // that opening the chooser and backing out of it still wrote a backup down,
+    // so the one screen whose job is to warn people instead reassured them:
+    // dismiss the sheet and it said "Last backup today, and nothing has changed
+    // since". That also silenced the stale-backup warning for the next 45 days.
+    //
+    // Success is still only "the user handed it to an app". Android reports the
+    // component that was chosen, not what that component then did with the file,
+    // so a share into a cloud app that later fails to sync counts here. That is
+    // the ceiling on what this can know, and it is why the wording says "last
+    // backup" and never "your waypoints are safe".
+    //
+    // Unavailable — desktop and web, where the platform cannot report at all —
+    // deliberately does not count either. The cost is a build that keeps asking
+    // somebody who has in fact made a backup, and the alternative is a build
+    // that tells somebody they have one when they may not. Only one of those
+    // loses data.
+    if (shared.status != ShareResultStatus.success) {
+      if (mounted && shared.status == ShareResultStatus.dismissed) {
+        showMessage(context, 'Cancelled, so this does not count as a backup.');
+      }
+      return;
+    }
     await widget.record.record(when: now, items: items.length);
     if (mounted) setState(() {});
   }

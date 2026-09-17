@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:open_woods_map/backup/backup_page.dart';
 import 'package:open_woods_map/backup/backup_record.dart';
@@ -20,6 +21,12 @@ class _Documents extends PathProviderPlatform with MockPlatformInterfaceMixin {
 
   @override
   Future<String?> getApplicationDocumentsPath() async => root;
+
+  /// Wanted by share_plus, not by this app: an [XFile] made from bytes has no
+  /// path, so the plugin writes it into the temporary directory before handing
+  /// it over. Without this the share throws instead of returning a status.
+  @override
+  Future<String?> getTemporaryPath() async => root;
 }
 
 Waypoint point(String id, {String name = 'Stand'}) => Waypoint(
@@ -243,6 +250,60 @@ void main() {
       expect(find.textContaining('left as they are'), findsOneWidget);
       await confirm(tester);
       expect(tagStyles.styleFor('ridge').colour, WaypointColour.orange);
+    });
+  });
+
+  group('what counts as having made a backup', () {
+    const channel = MethodChannel('dev.fluttercommunity.plus/share');
+
+    /// Stands in for the share sheet, answering the way Android does.
+    ///
+    /// The raw string is the whole protocol: empty means the chooser closed
+    /// without a choice, and a component name means one was picked.
+    void shareSheetAnswers(String raw) {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async => raw);
+    }
+
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+
+    Future<void> pressBackUp(WidgetTester tester) async {
+      await onDisk(tester, () => store.replaceAll([point('a')]));
+      await pumpPage(tester);
+      await tester.tap(find.widgetWithText(FilledButton, 'Make a backup file'));
+      await settle(tester);
+    }
+
+    testWidgets('handing the file to an app does', (tester) async {
+      shareSheetAnswers('com.example/.Target');
+      await pressBackUp(tester);
+      expect(record.at, isNotNull);
+      expect(find.textContaining('Last backup today'), findsOneWidget);
+    });
+
+    // Found on a device, and invisible to every test that existed at the time:
+    // the chooser was dismissed, nothing was saved anywhere, and the page went
+    // on to say "Last backup today, and nothing has changed since" — turning the
+    // one screen meant to warn people into one that reassured them, and
+    // silencing the stale-backup warning for the next 45 days.
+    testWidgets('backing out of the chooser does not', (tester) async {
+      shareSheetAnswers('');
+      await pressBackUp(tester);
+      expect(record.at, isNull);
+      expect(find.text('You have never made a backup.'), findsOneWidget);
+      expect(find.textContaining('does not count as a backup'), findsOneWidget);
+    });
+
+    // Desktop and web, where the platform cannot say what happened. Not
+    // counted, because a build that keeps asking is a nuisance and a build that
+    // claims a backup nobody made loses data.
+    testWidgets('a platform that cannot report does not', (tester) async {
+      shareSheetAnswers('dev.fluttercommunity.plus/share/unavailable');
+      await pressBackUp(tester);
+      expect(record.at, isNull);
     });
   });
 
