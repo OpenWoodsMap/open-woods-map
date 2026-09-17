@@ -79,6 +79,12 @@ Build a sideload APK: [docs/android_apk.md](docs/android_apk.md).
   the reasons behind every hour shown and moon phase deliberately left out. The
   only feature that needs a connection
 - Waypoints + GPS track recording; GPX / KML / GeoJSON import-export
+- **Backup & restore:** the app keeps rolling copies of your list on the phone
+  so a bulk delete or a bad import is recoverable long after the undo has gone,
+  and makes a complete backup file you can put wherever you like. The file is
+  plain GeoJSON any other tool reads, with tag styling in a member they ignore.
+  It will tell you when you last made one; it will not pretend to know you kept
+  it. See [docs/backup.md](docs/backup.md)
 - Opens on your own position, once per launch. If location is off or refused it
   falls back to the province without complaining, and switching basemaps keeps
   the view exactly where you left it
@@ -139,6 +145,7 @@ the map still zooms in past that, it just stops gaining detail.
 - [Android APK](docs/android_apk.md)
 - [iOS](docs/ios.md)
 - [Offline packs](docs/packs.md)
+- [Backup](docs/backup.md)
 - [GIS pipeline](tools/gis/README.md)
 
 ## License

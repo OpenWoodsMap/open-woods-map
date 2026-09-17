@@ -66,11 +66,12 @@ anything. The ones most often violated by accident:
 | `app/lib/offline/` | Pack download and install, plus offline basemap areas |
 | `app/lib/weather/` | Open-Meteo client and the deer activity heuristic |
 | `app/lib/waypoints/` | Local waypoint storage and import/export |
+| `app/lib/backup/` | Backup file format, on-device snapshots, restore |
 | `app/lib/ui/` | Shared UI helpers used across features, such as `showMessage` |
 | `tools/gis/` | Python fetch and build scripts, one per source |
 | `tools/devtest/` | Emulator harness for on-device sanity checks (`owm.ps1`) |
 | `data/{cc}/` | Generated per-province manifest, overlays, policies, seasons |
-| `docs/` | Constraints, architecture, datasets, sourcing, packs, APK build, devtest |
+| `docs/` | Constraints, architecture, datasets, sourcing, packs, backup, APK build, devtest |
 | `.agents/skills/` | Agent skills, vendor-neutral location |
 
 The large generated overlays under `data/{cc}/overlays/` are gitignored, named
