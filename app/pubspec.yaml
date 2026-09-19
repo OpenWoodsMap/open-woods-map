@@ -1,7 +1,7 @@
-name: open_woods_map
+﻿name: open_woods_map
 description: Offline-first Canadian hunting land map
 publish_to: 'none'
-version: 0.1.13+14
+version: 0.1.14+15
 
 environment:
   sdk: '>=3.7.0 <4.0.0'
@@ -82,7 +82,7 @@ flutter:
   #
   # A font rather than images because WaypointIcon.icon is an IconData that
   # lists, cards and filter chips all draw, and because the map's sprites are
-  # rasterised from this same file — which is what stops the two drifting apart.
+  # rasterised from this same file â€” which is what stops the two drifting apart.
   fonts:
     - family: OwmIcons
       fonts:

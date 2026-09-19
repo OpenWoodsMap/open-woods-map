@@ -29,6 +29,7 @@ import '../tracks/track_layers.dart';
 import '../tracks/track_math.dart';
 import '../tracks/track_style.dart';
 import '../ui/messages.dart';
+import '../weather/weather.dart';
 import '../waypoints/undo.dart';
 import '../waypoints/waypoint_card.dart';
 import '../waypoints/waypoint_icon.dart';
@@ -41,8 +42,11 @@ import 'fix_accuracy.dart';
 import 'land_info.dart';
 import 'land_info_sheet.dart';
 import 'layer_panel.dart';
+import 'measure.dart';
+import 'measure_bar.dart';
 import 'overlay_controller.dart';
 import 'walking_location.dart';
+import 'wind_chip.dart';
 
 class MapShell extends StatefulWidget {
   const MapShell({super.key});
@@ -152,6 +156,18 @@ class _MapShellState extends State<MapShell> {
   bool _myLocationEnabled = false;
   StreamSubscription<Position>? _positionSubscription;
   final List<TrackPoint> _activeTrack = [];
+
+  /// Whether a tap on the map adds to a measuring line instead of identifying
+  /// what is under it.
+  ///
+  /// A mode, and the only one that changes what the map's main gesture does, so
+  /// it is never on without [MeasureBar] on screen saying so.
+  var _measuring = false;
+  var _measure = const MeasureLine();
+
+  /// The wind reading on the map, or null when the chip is put away.
+  WindReading? _wind;
+  var _windLoading = false;
 
   /// Fixes discarded during the current recording for being too imprecise.
   /// Reported live in the recording bar and again on save; see
@@ -590,11 +606,14 @@ class _MapShellState extends State<MapShell> {
             position: PopupMenuPosition.under,
             color: const Color(0xFFFFFBF0),
             onSelected: (item) => switch (item) {
+              _MapMenuItem.measure => _startMeasuring(),
+              _MapMenuItem.wind => _showWind(),
               _MapMenuItem.offlinePacks => _openOfflinePacks(),
               _MapMenuItem.settings => _openSettings(),
             },
             itemBuilder: (context) => [
-              for (final item in _MapMenuItem.values)
+              for (final item in _MapMenuItem.values) ...[
+                if (item == _MapMenuItem.offlinePacks) const PopupMenuDivider(),
                 PopupMenuItem(
                   value: item,
                   child: Row(
@@ -605,6 +624,7 @@ class _MapShellState extends State<MapShell> {
                     ],
                   ),
                 ),
+              ],
             ],
           ),
         ],
@@ -713,6 +733,7 @@ class _MapShellState extends State<MapShell> {
                 await _attachLayers();
                 await _syncWaypointSource();
                 await _syncActiveTrackSource();
+                await _syncMeasureSource();
                 await _syncOfflineAreaSource();
                 if (_identifiedLocation != null) {
                   await _setIdentifyPin(_identifiedLocation!);
@@ -803,13 +824,26 @@ class _MapShellState extends State<MapShell> {
           // recording a new track while following an old one back out is a
           // reasonable thing to be doing and two bars at top: 8 would sit on top
           // of each other.
-          if (_recording || _followTrack != null)
+          if (_recording || _followTrack != null || _measuring)
             Positioned(
               left: 8,
               right: 8,
               top: 8,
               child: Column(
                 children: [
+                  // First, because it is the mode whose bar you are actively
+                  // tapping buttons on, and the only one that changes what the
+                  // rest of the map does.
+                  if (_measuring) ...[
+                    MeasureBar(
+                      line: _measure,
+                      onUndo: _undoMeasurePoint,
+                      onClear: _clearMeasure,
+                      onDone: _stopMeasuring,
+                    ),
+                    if (_recording || _followTrack != null)
+                      const SizedBox(height: 8),
+                  ],
                   if (_recordingStartedAt case final started? when _recording)
                     RecordingBar(
                       points: _activeTrack,
@@ -830,51 +864,72 @@ class _MapShellState extends State<MapShell> {
                 ],
               ),
             ),
-          if (_highlightedArea != null)
+          // The bottom-left corner, one column for everything that sits in it,
+          // so a wind chip and an offline-areas banner cannot land on top of
+          // each other. Clear of the basemap attribution along the bottom edge,
+          // which is a licence condition and not ours to cover up, and of the
+          // zoom and locate buttons down the right, which otherwise sit on top of
+          // these dismiss buttons.
+          if (_wind != null || _windLoading || _highlightedArea != null)
             Positioned(
               left: 8,
-              // Clear of the basemap attribution along the bottom edge, which is
-              // a licence condition and not ours to cover up, and of the zoom and
-              // locate buttons down the right, which otherwise sit on top of this
-              // banner's dismiss button.
               right: 76,
               bottom: 30,
-              child: Material(
-                color: const Color(0xE61B4332),
-                borderRadius: BorderRadius.circular(6),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.crop_free,
-                          size: 16, color: Color(0xFF76FF03)),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _offlineAreas.length > 1
-                              ? 'Saved offline: ${_highlightedArea!.name}, '
-                                  'outlined with your other '
-                                  '${_offlineAreas.length - 1} area'
-                                  '${_offlineAreas.length > 2 ? 's' : ''}'
-                              : 'Saved offline: ${_highlightedArea!.name}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            height: 1.3,
-                            color: Color(0xFFFFFBF0),
-                          ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_wind != null || _windLoading) ...[
+                    WindChip(
+                      reading: _wind,
+                      // So the arrow points at the ground rather than at the
+                      // screen once the map has been twisted.
+                      mapBearing: _camera.bearing,
+                      refreshing: _windLoading,
+                      onRefresh: _showWind,
+                      onDismiss: _hideWind,
+                    ),
+                    if (_highlightedArea != null) const SizedBox(height: 8),
+                  ],
+                  if (_highlightedArea != null)
+                    Material(
+                      color: const Color(0xE61B4332),
+                      borderRadius: BorderRadius.circular(6),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 6, 4, 6),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.crop_free,
+                                size: 16, color: Color(0xFF76FF03)),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                _offlineAreas.length > 1
+                                    ? 'Saved offline: ${_highlightedArea!.name}, '
+                                        'outlined with your other '
+                                        '${_offlineAreas.length - 1} area'
+                                        '${_offlineAreas.length > 2 ? 's' : ''}'
+                                    : 'Saved offline: ${_highlightedArea!.name}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  height: 1.3,
+                                  color: Color(0xFFFFFBF0),
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 18),
+                              color: const Color(0xFFFFFBF0),
+                              tooltip: 'Hide outlines',
+                              visualDensity: VisualDensity.compact,
+                              onPressed: _clearOfflineAreas,
+                            ),
+                          ],
                         ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 18),
-                        color: const Color(0xFFFFFBF0),
-                        tooltip: 'Hide outlines',
-                        visualDensity: VisualDensity.compact,
-                        onPressed: _clearOfflineAreas,
-                      ),
-                    ],
-                  ),
-                ),
+                    ),
+                ],
               ),
             ),
           if (_showLandInfoTip && !_needsPack)
@@ -1928,6 +1983,228 @@ class _MapShellState extends State<MapShell> {
     }
   }
 
+  /// Turns the map into a ruler until the user says otherwise.
+  ///
+  /// Reached from the overflow menu rather than a button of its own. The column
+  /// down the right is already six buttons deep with the things wanted on every
+  /// trip, and this is a tool somebody reaches for a few times a season — the
+  /// same reasoning that put offline packs and settings in that menu.
+  void _startMeasuring() {
+    setState(() {
+      _measuring = true;
+      _measure = const MeasureLine();
+    });
+  }
+
+  Future<void> _addMeasurePoint(LatLng coordinates) async {
+    // One tap can arrive twice, once as a map click and once through the feature
+    // tap path, which would put two points on the same spot and a zero-length leg
+    // between them. Exact equality is the right test precisely because it is the
+    // same event's coordinates both times; two taps by hand cannot land on
+    // identical doubles.
+    final last = _measure.points.isEmpty ? null : _measure.points.last;
+    if (last != null &&
+        last.latitude == coordinates.latitude &&
+        last.longitude == coordinates.longitude) {
+      return;
+    }
+    setState(
+      () => _measure = _measure.adding(
+        coordinates.latitude,
+        coordinates.longitude,
+      ),
+    );
+    await _syncMeasureSource();
+  }
+
+  Future<void> _undoMeasurePoint() async {
+    setState(() => _measure = _measure.withoutLast);
+    await _syncMeasureSource();
+  }
+
+  Future<void> _clearMeasure() async {
+    setState(() => _measure = const MeasureLine());
+    await _syncMeasureSource();
+  }
+
+  /// Leaves the mode, and takes the line with it.
+  ///
+  /// The line is not kept, because the bar is the only thing that says what it
+  /// measures: a dashed line left on the map with no number beside it is one more
+  /// thing drawn over the ground with no explanation, and this app already asks a
+  /// lot of the map's colours.
+  Future<void> _stopMeasuring() async {
+    setState(() {
+      _measuring = false;
+      _measure = const MeasureLine();
+    });
+    await _syncMeasureSource();
+  }
+
+  /// Draws the line being measured: a white casing, a dashed dark line on top of
+  /// it, and a dot on every point tapped.
+  ///
+  /// Dashed so it cannot be mistaken for anything the user has saved. Solid lines
+  /// on this map mean a track — red while recording, the track's own colour once
+  /// saved — and a measurement is scratch work that disappears when the bar does.
+  /// The casing is what keeps it readable over satellite imagery, where a dark
+  /// line alone vanishes into shadow and wet ground.
+  Future<void> _syncMeasureSource() async {
+    final map = _map;
+    if (!_styleReady || map == null) return;
+    final points = _measure.points;
+    final data = {
+      'type': 'FeatureCollection',
+      'features': [
+        if (points.length >= 2)
+          {
+            'type': 'Feature',
+            'properties': const {'kind': 'measure'},
+            'geometry': {
+              'type': 'LineString',
+              'coordinates': [
+                for (final point in points) [point.longitude, point.latitude],
+              ],
+            },
+          },
+        for (final point in points)
+          {
+            'type': 'Feature',
+            'properties': const {'kind': 'measure-point'},
+            'geometry': {
+              'type': 'Point',
+              'coordinates': [point.longitude, point.latitude],
+            },
+          },
+      ],
+    };
+    try {
+      await _putGeoJson(map, 'owm-measure', data, () async {
+        await map.addLineLayer(
+          'owm-measure',
+          'owm-measure-casing',
+          const LineLayerProperties(
+            lineColor: '#FFFFFF',
+            lineWidth: 6,
+            lineOpacity: 0.9,
+          ),
+        );
+        await map.addLineLayer(
+          'owm-measure',
+          'owm-measure-line',
+          const LineLayerProperties(
+            lineColor: '#1A1A1A',
+            lineWidth: 2.5,
+            // A fixed pattern, not a data-driven one. `line-dasharray` is only
+            // data-driven on the web, and every feature in this source is a
+            // measurement, so one pattern for the layer is all that is needed.
+            lineDasharray: [2, 1.6],
+          ),
+        );
+        await map.addCircleLayer(
+          'owm-measure',
+          'owm-measure-points',
+          const CircleLayerProperties(
+            circleRadius: 5,
+            circleColor: '#FFFFFF',
+            circleStrokeWidth: 2,
+            circleStrokeColor: '#1A1A1A',
+          ),
+        );
+      });
+    } catch (_) {
+      // The bar still carries every number; only the line would be missing.
+    }
+  }
+
+  /// Fetches the wind where the phone says you are and shows it in the corner.
+  ///
+  /// A fix rather than the map centre, for the reason the save-a-waypoint-here
+  /// button exists: somebody who has panned across the district to look at a
+  /// ridge is still asking about the wind on their own face, and answering the
+  /// other question would look identical.
+  ///
+  /// Also the refresh. Wind turns, and the chip says how old its reading is, so
+  /// the next thing a person who has read that wants is this same call. It can
+  /// come back with the same numbers — the weather client holds a report for
+  /// fifteen minutes to stay inside Open-Meteo's free allowance — and the age
+  /// comes from when the data was actually fetched rather than from this tap, so
+  /// a refresh that changed nothing says so instead of looking new.
+  Future<void> _showWind() async {
+    if (_windLoading) return;
+    setState(() => _windLoading = true);
+    try {
+      if (!await _ensureLocationPermission('show the wind where you are')) {
+        return;
+      }
+      final position = await _positionForWind();
+      final report = await defaultWeatherService.fetch(
+        position.latitude,
+        position.longitude,
+      );
+      if (!mounted) return;
+      setState(
+        () => _wind = WindReading(
+          directionFrom: report.current.windDirection,
+          speedKmh: report.current.windSpeed,
+          gustsKmh: report.current.windGusts,
+          takenAt: report.fetchedAt,
+        ),
+      );
+    } on WeatherUnavailable catch (error) {
+      // Wind is the one thing on this map that needs a connection, and the
+      // client's own message says so. Nothing else on screen changes.
+      _toast('$error');
+    } on TimeoutException {
+      _toast(
+        'No GPS fix yet, so there is nowhere to read the wind for. '
+        'Try again with a clearer view of the sky.',
+      );
+    } catch (error) {
+      _toast('Could not get the wind: $error');
+    } finally {
+      if (mounted) setState(() => _windLoading = false);
+    }
+  }
+
+  /// Where to read the wind for.
+  ///
+  /// A recent last-known fix is taken over a new one, which is the opposite of
+  /// what saving a waypoint does, and for a reason: a waypoint is a claim about
+  /// where somebody stood and has to be right to the metre, while the forecast
+  /// behind this chip is bucketed to about a kilometre before it is even asked
+  /// for. Inside a building `getCurrentPosition` can wait indefinitely for a fix
+  /// that is no better than the one already on hand — which is exactly how this
+  /// looked the first time it ran: a menu item that did nothing, for as long as
+  /// anyone cared to watch.
+  ///
+  /// Ten minutes because that is short enough that the fix is still in the same
+  /// forecast cell as the user, on foot. Past that, and with no fresh fix inside
+  /// the time limit, the caller says so rather than reading the wind for wherever
+  /// the phone was last switched on — which is the one answer here that could be
+  /// wrong by a province.
+  Future<Position> _positionForWind() async {
+    final last = await Geolocator.getLastKnownPosition();
+    if (last != null &&
+        DateTime.now().difference(last.timestamp) < const Duration(minutes: 10)) {
+      return last;
+    }
+    return Geolocator.getCurrentPosition(
+      // High, even though a forecast cell is kilometres across and a coarse fix
+      // would be plenty. Medium was the obvious choice and it did not work: on a
+      // Galaxy indoors it asks for balanced-power location, waited out the full
+      // twenty seconds and gave nothing, while the waypoint button beside it took
+      // a GPS fix in under four. Spending a little battery on the accuracy that
+      // actually returns beats an honest timeout nobody wanted.
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 20),
+      ),
+    );
+  }
+
+  void _hideWind() => setState(() => _wind = null);
+
   Future<void> _selectProvince(String id) async {
     setState(() {
       _provinceId = id;
@@ -2034,6 +2311,21 @@ class _MapShellState extends State<MapShell> {
   }
 
   Future<void> _identify(math.Point<double> point, LatLng coordinates) async {
+    // Measuring borrows the identify gesture rather than adding a new one,
+    // because there is no second single-finger gesture to borrow. That is why it
+    // is a mode with a bar at the top: taking over the app's main gesture is only
+    // honest if the app is visibly doing it.
+    //
+    // Guarded here rather than at onMapClick, which was the first attempt and
+    // fixed nothing over a province full of overlays: a tap that lands on a fill
+    // arrives through onFeatureTapped instead, so Land Info kept opening
+    // mid-measurement everywhere it mattered. Every route to identifying comes
+    // through this method, so this is the only place the mode can be respected
+    // once.
+    if (_measuring) {
+      await _addMeasurePoint(coordinates);
+      return;
+    }
     final map = _map;
     if (map == null) return;
     // One tap on a fill arrives twice: once as a map click and once through the
@@ -2450,6 +2742,10 @@ class _MapShellState extends State<MapShell> {
 
 /// The screens reached from the map's overflow menu rather than from a button.
 enum _MapMenuItem {
+  // Two map tools, then the two screens you leave the map for, with a divider
+  // between them in the menu.
+  measure(label: 'Measure a distance', icon: Icons.straighten),
+  wind(label: 'Wind where I am', icon: Icons.air),
   offlinePacks(label: 'Offline packs', icon: Icons.offline_bolt_outlined),
   settings(label: 'Settings', icon: Icons.tune);
 

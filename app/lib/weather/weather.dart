@@ -177,9 +177,12 @@ class WeatherService {
           .get(uri, headers: {'User-Agent': 'OpenWoodsMap/0.1'})
           .timeout(const Duration(seconds: 20));
     } catch (error) {
+      // "In this card" until the map grew a wind chip that shows this same
+      // message in a snackbar, where it named a card the user was not looking at.
+      // Worded for wherever it lands now.
       throw const WeatherUnavailable(
         'Could not reach the weather service. Weather needs a connection; '
-        'everything else in this card works offline.',
+        'everything else works offline.',
       );
     }
     if (response.statusCode != 200) {

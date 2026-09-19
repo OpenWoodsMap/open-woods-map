@@ -71,6 +71,14 @@ Build a sideload APK: [docs/android_apk.md](docs/android_apk.md).
   bylaws, land tenure, designation, policy), *Seasons* and *Weather*. Land-use
   policies read offline from the pack, with a link to the official live report
 - On-screen zoom buttons alongside pinch-zoom
+- **Measure a distance:** tap along the map for a running total, the straight
+  line end to end, and the heading of the last leg. Map distance, so it ignores
+  the ground going up and down — a phone's elevation readings are not good
+  enough to claim otherwise
+- **Wind where you are:** one line in the corner saying which way the wind is
+  coming from, how hard, and which way it is therefore blowing, with an arrow
+  that turns with the map. It says it is a forecast ten metres up rather than a
+  measurement in the trees, and how old the reading is. Needs a connection
 - **Seasons:** every species with a published WMU season table, split into
   open now / upcoming / closed, filterable by game group and residency
 - **Weather:** current conditions and wind direction for the tapped point, legal
