@@ -4,6 +4,24 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <!-- Track recording is useless without these. Android stops delivering
+         location to a backgrounded app, and a phone in a pocket with the screen
+         off is a backgrounded app, so a recorded walk came out as straight lines
+         between the moments the user happened to look at the screen. Geolocator
+         declares the location service itself but not these permissions; without
+         them the service refuses to start on Android 14 and up.
+
+         WAKE_LOCK is what actually fixes it rather than merely allowing the
+         service: geolocator's own documentation notes that without a wake lock
+         "the system can still sleep and all location events will be received at
+         once when the system wakes up again", which is the same wrong answer
+         arriving later. POST_NOTIFICATIONS is for the notice the service has to
+         show while it holds the GPS; somebody whose battery is draining in their
+         pocket deserves to know what is doing it. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- Backup stays on, but scoped. The default backs up the whole data
          directory, which here means the installed province packs and the offline
          basemap tile store: tens to hundreds of megabytes the user can

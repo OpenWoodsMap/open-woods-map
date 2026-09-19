@@ -2,8 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+// Re-exports AndroidSettings and ForegroundNotificationConfig, so asking for the
+// Android foreground service needs no platform-specific import. The call site
+// checks the platform before building one.
 import 'package:geolocator/geolocator.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -38,6 +42,7 @@ import 'land_info.dart';
 import 'land_info_sheet.dart';
 import 'layer_panel.dart';
 import 'overlay_controller.dart';
+import 'walking_location.dart';
 
 class MapShell extends StatefulWidget {
   const MapShell({super.key});
@@ -1152,12 +1157,10 @@ class _MapShellState extends State<MapShell> {
   void _startPositionStream() {
     if (_positionSubscription != null) return;
     _positionSubscription = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        // Standing still otherwise piles up fixes at one spot, which inflates a
-        // recorded track's point count and its length with pure noise.
-        distanceFilter: 5,
-      ),
+      // On Android this asks for a foreground service with a wake lock, which is
+      // the only reason fixes keep arriving once the screen goes off. See
+      // walking_location.dart.
+      locationSettings: walkingLocationSettings(defaultTargetPlatform),
     ).listen(
       _onPosition,
       onError: (Object error) => _toast('Location error: $error'),

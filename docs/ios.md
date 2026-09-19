@@ -85,6 +85,19 @@ remain possible without a rewrite:
   `style_server_io.dart` and `offline_pack_store_io.dart` already do.
 - `Info.plist` keeps its `NSAppTransportSecurity` loopback exemption, which the
   offline basemap's style server needs. See [packs.md](packs.md).
+- **Track recording is Android-only in one specific way, and this is the first
+  thing to fix if an iOS build is ever attempted.** `walking_location.dart` asks
+  Android for a foreground service with a wake lock, because without it the OS
+  stops delivering fixes the moment the screen goes off and a recorded walk comes
+  out as straight lines between the times somebody looked at their phone. iOS needs
+  the equivalent: `UIBackgroundModes` with `location` in `Info.plist`, plus
+  `AppleSettings(allowBackgroundLocationUpdates: true,
+  showBackgroundLocationIndicator: true, pauseLocationUpdatesAutomatically:
+  false)`. Both halves are required — asking for background updates without the
+  plist entry fails at runtime. That configuration is deliberately absent rather
+  than written blind, because a plausible-looking guess nobody can run is exactly
+  the kind of untested claim this file warns about, and the symptom it produces is
+  a silently incomplete track rather than an error.
 
 Nothing in `app/ios/` has ever been compiled. Treat "it should build" as an
 untested claim: the first real attempt will surface CocoaPods, signing and
