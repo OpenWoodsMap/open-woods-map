@@ -630,7 +630,6 @@ class _MapShellState extends State<MapShell> {
             onSelected: (item) => switch (item) {
               _MapMenuItem.measure => _startMeasuring(),
               _MapMenuItem.wind => _showWind(),
-              _MapMenuItem.myMaps => _showCustomMaps(),
               _MapMenuItem.offlinePacks => _openOfflinePacks(),
               _MapMenuItem.settings => _openSettings(),
             },
@@ -1040,6 +1039,9 @@ class _MapShellState extends State<MapShell> {
   }
 
   Future<void> _pickBasemap() async {
+    // Set by the My maps row instead of coming back as a result, because the
+    // sheet's result type is the chosen basemap and that row chooses none.
+    var toMyMaps = false;
     final next = await showModalBottomSheet<BasemapKind>(
       context: context,
       showDragHandle: true,
@@ -1051,9 +1053,17 @@ class _MapShellState extends State<MapShell> {
         child: BasemapPanel(
           selected: _basemap,
           onPick: (kind) => Navigator.pop(context, kind),
+          customCount: _customMaps.maps.length,
+          customDrawn: _customMaps.drawn.length,
+          onMyMaps: () {
+            toMyMaps = true;
+            Navigator.pop(context);
+          },
         ),
       ),
     );
+    if (!mounted) return;
+    if (toMyMaps) return _showCustomMaps();
     if (next == null || next == _basemap) return;
     // Ask the platform where the camera actually is before dropping the
     // controller. onCameraMove keeps _camera fresh during gestures, but this is
@@ -3003,7 +3013,8 @@ enum _MapMenuItem {
   // between them in the menu.
   measure(label: 'Measure a distance', icon: Icons.straighten),
   wind(label: 'Wind where I am', icon: Icons.air),
-  myMaps(label: 'My maps', icon: Icons.add_photo_alternate_outlined),
+  // My maps is deliberately absent: it lives at the foot of the basemap sheet,
+  // which is where "what is the picture under my data" is already answered.
   offlinePacks(label: 'Offline packs', icon: Icons.offline_bolt_outlined),
   settings(label: 'Settings', icon: Icons.tune);
 

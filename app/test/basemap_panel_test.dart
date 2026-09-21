@@ -4,7 +4,16 @@ import 'package:open_woods_map/map/basemap.dart';
 import 'package:open_woods_map/map/basemap_panel.dart';
 
 void main() {
-  Future<BasemapKind?> pumpPanel(WidgetTester tester, Size size) async {
+  var myMapsTaps = 0;
+
+  setUp(() => myMapsTaps = 0);
+
+  Future<BasemapKind?> pumpPanel(
+    WidgetTester tester,
+    Size size, {
+    int customCount = 0,
+    int customDrawn = 0,
+  }) async {
     BasemapKind? picked;
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
@@ -15,6 +24,9 @@ void main() {
           body: BasemapPanel(
             selected: BasemapKind.streets,
             onPick: (kind) => picked = kind,
+            onMyMaps: () => myMapsTaps++,
+            customCount: customCount,
+            customDrawn: customDrawn,
           ),
         ),
       ),
@@ -51,6 +63,7 @@ void main() {
           body: BasemapPanel(
             selected: BasemapKind.streets,
             onPick: (kind) => picked = kind,
+            onMyMaps: () {},
           ),
         ),
       ),
@@ -103,5 +116,51 @@ void main() {
     final panel = tester.getSize(find.byType(BasemapPanel));
     expect(panel.height, lessThan(2400 * 0.85),
         reason: 'content should size the sheet when it fits');
+  });
+
+  // This sheet is where people look for what the picture under their data is,
+  // which is why the door to their own maps is here and not in the overflow
+  // menu. It is a door and not a fifth option: a basemap is one of four, and a
+  // map you bring is one of any number with an opacity each.
+  group('the door to My maps', () {
+    testWidgets('is not offered as another basemap', (tester) async {
+      await pumpPanel(tester, const Size(1080, 2400));
+
+      await tester.tap(find.text('My maps'));
+      await tester.pumpAndSettle();
+      expect(myMapsTaps, 1);
+      expect(
+        BasemapKind.values.map((kind) => kind.label),
+        isNot(contains('My maps')),
+      );
+    });
+
+    testWidgets('invites you in when there is nothing there yet',
+        (tester) async {
+      await pumpPanel(tester, const Size(1080, 2400));
+      expect(find.textContaining('Bring your own'), findsOneWidget);
+    });
+
+    // Added but switched off looks from the map exactly like not added at all,
+    // so the count that matters is how many are actually drawn.
+    testWidgets('says none are drawn when all of them are off',
+        (tester) async {
+      await pumpPanel(tester, const Size(1080, 2400),
+          customCount: 2, customDrawn: 0);
+      expect(find.text('2 added, none drawn right now'), findsOneWidget);
+    });
+
+    testWidgets('counts the drawn ones when only some are on', (tester) async {
+      await pumpPanel(tester, const Size(1080, 2400),
+          customCount: 3, customDrawn: 1);
+      expect(find.text('1 of 3 drawn'), findsOneWidget);
+    });
+
+    testWidgets('does not bother with a fraction when all are on',
+        (tester) async {
+      await pumpPanel(tester, const Size(1080, 2400),
+          customCount: 2, customDrawn: 2);
+      expect(find.text('2 drawn over the basemap'), findsOneWidget);
+    });
   });
 }
