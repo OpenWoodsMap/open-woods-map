@@ -32,6 +32,13 @@ const int _tileCountLimit = 500000;
 /// thousands of tiles in a few minutes. MapLibre retries a rate-limited request
 /// with a growing backoff, so the download does not fail, it crawls, and to a
 /// user watching a progress bar that is indistinguishable from being stuck.
+///
+/// These limits live on one global OkHttp client, so anything else that
+/// installs a client removes them. `setHttpHeaders` is safe: the plugin keeps
+/// the headers and the dispatcher in the same place and reapplies both.
+/// `MapLibreMapController.setCustomHeaders` is not, and says nothing when it
+/// happens: it builds a fresh client with no dispatcher at all, which drops
+/// the download back to MapLibre's own 20 requests per host.
 const int _maxConcurrentRequests = 4;
 const int _maxRequestsPerHost = 2;
 

@@ -207,6 +207,14 @@ SizeEstimate estimateRegionSize({
 
   for (final source in sources) {
     if (!source.covers(bounds)) continue;
+    // Walked at the region's own zoom levels. MapLibre's coveringZoomLevel
+    // shifts a 256-pixel raster source up one level, which would put a whole
+    // extra level of tiles in the download and make this roughly four times
+    // low. Measured against the device twice on one footprint of Ontario
+    // imagery, it does not: z12 estimated 336 KB and fetched 567 KB, z14
+    // estimated 630 KB and fetched 900 KB. That is tile weight, not a missing
+    // level, and it sits inside the "approximate" the save dialog promises.
+    // Do not add the offset without measuring again first.
     final from = math.max(minZoom, source.minZoom);
     final to = math.min(maxZoom, source.maxZoom);
     for (var zoom = from; zoom <= to; zoom++) {
