@@ -1087,6 +1087,16 @@ bool quotesStatute(String? basis) => basis == 'ppcra_s15_3';
 /// explicitly permits hunting on. Nothing inferred gets to look this certain.
 const Color _permitted = Color(0xFF1B5E20);
 
+/// Whether a verdict is one of the two that say yes.
+///
+/// Exists so a surface too small to carry the basis, the quoted regulation and
+/// the coverage caveats can repeat the cautious verdicts and leave the
+/// permissive ones to this card, which carries all three. Asymmetric on purpose:
+/// it has to stay harder to make the app sound permissive than uncertain, and a
+/// summary that can only ever add doubt cannot overclaim.
+bool verdictSoundsPermissive((String, Color) verdict) =>
+    verdict.$2 == _permitted;
+
 /// The words and colour for a feature's hunting status.
 ///
 /// A top-level function rather than a method on the badge so the wording can be

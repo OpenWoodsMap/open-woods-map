@@ -49,6 +49,7 @@ import 'layer_panel.dart';
 import 'measure.dart';
 import 'measure_bar.dart';
 import 'overlay_controller.dart';
+import 'spot_card.dart';
 import 'walking_location.dart';
 import 'wind_chip.dart';
 
@@ -180,6 +181,14 @@ class _MapShellState extends State<MapShell> {
   /// The wind reading on the map, or null when the chip is put away.
   WindReading? _wind;
   var _windLoading = false;
+
+  /// The spot a tap last asked about, with what was found there. Null when no
+  /// card is showing.
+  ///
+  /// The hits are kept rather than the screen point they came from, because a
+  /// screen point stops meaning this ground the moment the map is panned, and the
+  /// card stays up while the map moves under it.
+  ({LandInfo info, SpotSummary summary})? _spot;
 
   /// Fixes discarded during the current recording for being too imprecise.
   /// Reported live in the recording bar and again on save; see
@@ -651,86 +660,96 @@ class _MapShellState extends State<MapShell> {
           ),
         ],
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Zoom without pinching: one-handed, and usable on an emulator.
-          FloatingActionButton.small(
-            heroTag: 'zoomIn',
-            tooltip: 'Zoom in',
-            backgroundColor: const Color(0xFFFFFBF0),
-            foregroundColor: const Color(0xFF1B4332),
-            onPressed: () => _zoom(zoomIn: true),
-            child: const Icon(Icons.add),
-          ),
-          const SizedBox(height: 6),
-          FloatingActionButton.small(
-            heroTag: 'zoomOut',
-            tooltip: 'Zoom out',
-            backgroundColor: const Color(0xFFFFFBF0),
-            foregroundColor: const Color(0xFF1B4332),
-            onPressed: () => _zoom(zoomIn: false),
-            child: const Icon(Icons.remove),
-          ),
-          // Only while the map is turned. A permanent button for a state most
-          // people never enter would take room in the tightest column on screen,
-          // and its icon would say nothing when the map is already square.
-          if (_mapIsRotated) ...[
-            const SizedBox(height: 6),
+      // The gaps between these buttons used to be holes through to the map,
+      // so a thumb that missed by a few pixels dropped an identify pin behind
+      // the column it had been aiming at. Absorbing taps across the whole
+      // stack costs nothing real: a drag that starts on a button already does
+      // not reach the map, because the button claims the pointer, so the gaps
+      // now behave the way the buttons around them always have.
+      floatingActionButton: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {},
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Zoom without pinching: one-handed, and usable on an emulator.
             FloatingActionButton.small(
-              heroTag: 'north',
-              tooltip: 'Put north back at the top',
+              heroTag: 'zoomIn',
+              tooltip: 'Zoom in',
               backgroundColor: const Color(0xFFFFFBF0),
               foregroundColor: const Color(0xFF1B4332),
-              onPressed: _resetNorth,
-              child: const Icon(Icons.explore),
+              onPressed: () => _zoom(zoomIn: true),
+              child: const Icon(Icons.add),
+            ),
+            const SizedBox(height: 6),
+            FloatingActionButton.small(
+              heroTag: 'zoomOut',
+              tooltip: 'Zoom out',
+              backgroundColor: const Color(0xFFFFFBF0),
+              foregroundColor: const Color(0xFF1B4332),
+              onPressed: () => _zoom(zoomIn: false),
+              child: const Icon(Icons.remove),
+            ),
+            // Only while the map is turned. A permanent button for a state most
+            // people never enter would take room in the tightest column on screen,
+            // and its icon would say nothing when the map is already square.
+            if (_mapIsRotated) ...[
+              const SizedBox(height: 6),
+              FloatingActionButton.small(
+                heroTag: 'north',
+                tooltip: 'Put north back at the top',
+                backgroundColor: const Color(0xFFFFFBF0),
+                foregroundColor: const Color(0xFF1B4332),
+                onPressed: _resetNorth,
+                child: const Icon(Icons.explore),
+              ),
+            ],
+            const SizedBox(height: 16),
+            FloatingActionButton.small(
+              heroTag: 'track',
+              tooltip:
+                  _recording ? 'Stop and save track' : 'Start track recording',
+              backgroundColor:
+                  _recording ? Theme.of(context).colorScheme.error : null,
+              foregroundColor:
+                  _recording ? Theme.of(context).colorScheme.onError : null,
+              onPressed: _recording ? _stopTrackRecording : _startTrackRecording,
+              child: Icon(_recording ? Icons.stop : Icons.route),
+            ),
+            const SizedBox(height: 10),
+            FloatingActionButton(
+              heroTag: 'locate',
+              tooltip: 'Zoom to my location',
+              onPressed: _locating ? null : _goToMyLocation,
+              child:
+                  _locating
+                      ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.my_location),
+            ),
+            // Bottom of the column, so the two buttons about where you are sit
+            // together and the commonest one is the easiest to reach with a thumb.
+            // A person icon rather than another pin: everything else that makes a
+            // waypoint is about a place on the map, and this one is about you.
+            const SizedBox(height: 10),
+            FloatingActionButton(
+              heroTag: 'here',
+              tooltip: 'Save a waypoint where I am',
+              onPressed: _savingHere ? null : _saveWaypointHere,
+              child:
+                  _savingHere
+                      ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Icons.person_pin_circle),
             ),
           ],
-          const SizedBox(height: 16),
-          FloatingActionButton.small(
-            heroTag: 'track',
-            tooltip:
-                _recording ? 'Stop and save track' : 'Start track recording',
-            backgroundColor:
-                _recording ? Theme.of(context).colorScheme.error : null,
-            foregroundColor:
-                _recording ? Theme.of(context).colorScheme.onError : null,
-            onPressed: _recording ? _stopTrackRecording : _startTrackRecording,
-            child: Icon(_recording ? Icons.stop : Icons.route),
-          ),
-          const SizedBox(height: 10),
-          FloatingActionButton(
-            heroTag: 'locate',
-            tooltip: 'Zoom to my location',
-            onPressed: _locating ? null : _goToMyLocation,
-            child:
-                _locating
-                    ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                    : const Icon(Icons.my_location),
-          ),
-          // Bottom of the column, so the two buttons about where you are sit
-          // together and the commonest one is the easiest to reach with a thumb.
-          // A person icon rather than another pin: everything else that makes a
-          // waypoint is about a place on the map, and this one is about you.
-          const SizedBox(height: 10),
-          FloatingActionButton(
-            heroTag: 'here',
-            tooltip: 'Save a waypoint where I am',
-            onPressed: _savingHere ? null : _saveWaypointHere,
-            child:
-                _savingHere
-                    ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                    : const Icon(Icons.person_pin_circle),
-          ),
-        ],
+        ),
       ),
       body: Stack(
         children: [
@@ -902,7 +921,10 @@ class _MapShellState extends State<MapShell> {
           // which is a licence condition and not ours to cover up, and of the
           // zoom and locate buttons down the right, which otherwise sit on top of
           // these dismiss buttons.
-          if (_wind != null || _windLoading || _highlightedArea != null)
+          if (_wind != null ||
+              _windLoading ||
+              _highlightedArea != null ||
+              _spot != null)
             Positioned(
               left: 8,
               right: 76,
@@ -921,7 +943,8 @@ class _MapShellState extends State<MapShell> {
                       onRefresh: _showWind,
                       onDismiss: _hideWind,
                     ),
-                    if (_highlightedArea != null) const SizedBox(height: 8),
+                    if (_highlightedArea != null || _spot != null)
+                      const SizedBox(height: 8),
                   ],
                   if (_highlightedArea != null)
                     Material(
@@ -961,6 +984,21 @@ class _MapShellState extends State<MapShell> {
                         ),
                       ),
                     ),
+                  // Last, so it sits nearest the thumb that just made it, and
+                  // below anything that was already on screen.
+                  if (_spot case final spot?) ...[
+                    if (_highlightedArea != null) const SizedBox(height: 8),
+                    SpotCard(
+                      latitude: spot.info.latitude,
+                      longitude: spot.info.longitude,
+                      summary: spot.summary,
+                      onLandInfo: _provinceData == null
+                          ? null
+                          : () => _openLandInfoSheet(spot.info),
+                      onSaveWaypoint: () => _saveWaypointFromSpot(spot.info),
+                      onDismiss: _dismissSpot,
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -987,8 +1025,8 @@ class _MapShellState extends State<MapShell> {
                             'municipal & county forest; the gaps between tracts '
                             'are private. Blue = parks. Red = no shooting. '
                             'Colour shows tenure, not permission — tap any spot '
-                            'for Land Info, or hold it to save a waypoint '
-                            'there.',
+                            'to see what is under it, then Land info for the '
+                            'rules. Holding a spot saves a waypoint there.',
                             style: TextStyle(fontSize: 12, height: 1.3),
                           ),
                         ),
@@ -2201,7 +2239,11 @@ class _MapShellState extends State<MapShell> {
     setState(() {
       _measuring = true;
       _measure = const MeasureLine();
+      // A card offering Land Info for one spot has nothing to do with the line
+      // about to be drawn, and its buttons would sit under the measure bar's.
+      _spot = null;
     });
+    _clearIdentifyPin();
   }
 
   Future<void> _addMeasurePoint(LatLng coordinates) async {
@@ -2551,10 +2593,66 @@ class _MapShellState extends State<MapShell> {
         await _openWaypointCard(mine, coordinates);
         return;
       }
-      await _showLandInfo(map, point, coordinates);
+      await _peekAt(map, point, coordinates);
     } finally {
       _identifying = null;
     }
+  }
+
+  /// The first answer a tap on bare ground gets.
+  ///
+  /// Opening the full sheet here was right for a deliberate tap and wrong for the
+  /// many taps that are a thumb catching the map on the way past: a modal over
+  /// the whole screen had to be dismissed before the map could be moved again.
+  /// This leaves a pin, one line about the ground, and the two things a tap is
+  /// usually for, over a map that keeps working underneath.
+  Future<void> _peekAt(
+    MapLibreMapController map,
+    math.Point<double> point,
+    LatLng coordinates,
+  ) async {
+    final data = _provinceData;
+    // Queried once, at the moment the screen point still means this ground, and
+    // handed to the sheet later if the user asks for it.
+    final info = LandInfo(
+      latitude: coordinates.latitude,
+      longitude: coordinates.longitude,
+      hits: data == null ? const [] : await _hitsAt(map, point),
+      attribution: data == null
+          ? ''
+          : '${data.manifest.license}. ${data.manifest.licenseUrl}',
+    );
+    await _setIdentifyPin(coordinates);
+    if (!mounted) return;
+    // A snackbar is drawn over the body, so one already on screen would sit on
+    // this card's buttons — which is not hypothetical: the search jump raises one
+    // naming the place it landed on, and tapping the map is the next thing anyone
+    // does. Clearing it is right rather than merely convenient, because it offers
+    // Land Info for the spot the card now offers Land Info for. The cost is that
+    // an UNDO from a delete on the map card goes with it; it was unreachable
+    // under the card anyway, and a snapshot is taken before every deletion.
+    ScaffoldMessenger.of(context).clearSnackBars();
+    setState(() {
+      _spot = (
+        info: info,
+        summary: data == null
+            ? SpotSummary.noData
+            : spotSummary(info, data.layers),
+      );
+    });
+  }
+
+  Future<void> _dismissSpot() async {
+    setState(() => _spot = null);
+    await _clearIdentifyPin();
+  }
+
+  /// Saves the tapped spot and puts the card away, because the card was asking
+  /// what to do with that spot and now it has been answered. The pin stays: the
+  /// waypoint's own marker is drawn there.
+  Future<void> _saveWaypointFromSpot(LandInfo info) async {
+    setState(() => _spot = null);
+    await _saveWaypointAt(LatLng(info.latitude, info.longitude));
   }
 
   /// Land Info for a spot, with no regard for what the user has saved there.
@@ -2571,20 +2669,35 @@ class _MapShellState extends State<MapShell> {
     final hits = await _hitsAt(map, point);
     await _setIdentifyPin(coordinates);
     if (!mounted) return;
-    await showLandInfoSheet(
-      context,
-      info: LandInfo(
+    await _openLandInfoSheet(
+      LandInfo(
         latitude: coordinates.latitude,
         longitude: coordinates.longitude,
         hits: hits,
         attribution: '${data.manifest.license}. ${data.manifest.licenseUrl}',
       ),
+    );
+  }
+
+  /// The full card for hits already in hand.
+  ///
+  /// Split from [_showLandInfo] so the small card a tap leaves can open the sheet
+  /// without asking the map the same question again — and without needing a
+  /// screen point, which it no longer has once the map has moved.
+  Future<void> _openLandInfoSheet(LandInfo info) async {
+    final data = _provinceData;
+    if (data == null) return;
+    await showLandInfoSheet(
+      context,
+      info: info,
       provinceId: _provinceId,
       loader: _loader,
       manifest: data.manifest,
       seasons: data.seasons,
       layers: data.layers,
-      onSaveWaypoint: () => _saveWaypointAt(coordinates),
+      onSaveWaypoint: () => _saveWaypointAt(
+        LatLng(info.latitude, info.longitude),
+      ),
     );
   }
 

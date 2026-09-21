@@ -67,9 +67,12 @@ Build a sideload APK: [docs/android_apk.md](docs/android_apk.md).
 - **Sunday gun hunting:** permitted north of the French and Mattawa rivers, and
   south of them only in the 193 jurisdictions the regulation schedules. The card
   says which case applies at the tapped point
-- **Land Info:** tap anywhere for a three-tab card — *Land* (local government for
-  bylaws, land tenure, designation, policy), *Seasons* and *Weather*. Land-use
-  policies read offline from the pack, with a link to the official live report
+- **Land Info:** tap anywhere for a small card naming the ground and flagging any
+  closure or condition on it, then *Land info* for the full three-tab report —
+  *Land* (local government for bylaws, land tenure, designation, policy),
+  *Seasons* and *Weather*. Land-use policies read offline from the pack, with a
+  link to the official live report. The small card never says hunting is
+  permitted: a yes is only honest beside the regulation it comes from
 - On-screen zoom buttons alongside pinch-zoom
 - **Measure a distance:** tap along the map for a running total, the straight
   line end to end, and the heading of the last leg. Map distance, so it ignores
