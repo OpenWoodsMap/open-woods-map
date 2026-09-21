@@ -19,7 +19,11 @@ void main() {
   group('sourceSpecsFromStyle', () {
     test('reads the bundled satellite style', () {
       final specs = sourceSpecsFromStyle(readStyle('satellite'));
-      expect(specs.map((s) => s.id).toSet(), {'sentinel2', 'on-ortho'});
+      expect(specs.map((s) => s.id).toSet(), {
+        'sentinel2',
+        'qc-ortho',
+        'on-ortho',
+      });
       final sentinel = specs.firstWhere((s) => s.id == 'sentinel2');
       expect(sentinel.maxZoom, 14);
       expect(sentinel.bounds, isNull, reason: 'Sentinel-2 is worldwide');
@@ -60,17 +64,57 @@ void main() {
       }
     });
 
-    // MRNF publishes this service as licence "Sans objet" and says the address
-    // "n'est pas diffusée et ne peut être utilisée". It was shipped for a while
-    // on the mistaken belief that the Quebec open licence covered it. Removing
-    // it cost Quebec everything above Sentinel-2's z14, which makes it exactly
-    // the kind of thing someone puts back without rechecking the licence.
-    test('no style names the Quebec imagery service', () {
+    // MRNF publishes `Imagerie_Continue` as licence "Sans objet" and says its
+    // address "n'est pas diffusée et ne peut être utilisée". It shipped for a
+    // while on the mistaken belief that the Quebec open licence covered it. The
+    // replacement lives on the same host, so this can no longer guard the
+    // hostname — it has to name the service, which is the part that was refused.
+    test('no style names the refused Quebec imagery service', () {
       for (final name in ['satellite', 'hybrid']) {
         expect(
           readStyle(name),
-          isNot(contains('servicesmatriciels')),
+          isNot(contains('Imagerie_Continue')),
           reason: 'see docs/datasets.md on Quebec orthophotography',
+        );
+      }
+    });
+
+    // The service declares a worldwide bounding box and answers outside its
+    // aerial footprint with an opaque placeholder rather than a 404, so without
+    // bounds of our own it would paint flat tiles over Sentinel-2 across the
+    // continent. The north edge follows the ministry's own description of the
+    // coverage, "au sud du 52e parallèle".
+    test('Quebec imagery is bounded, because it never returns a 404', () {
+      for (final name in ['satellite', 'hybrid']) {
+        final quebec = sourceSpecsFromStyle(
+          readStyle(name),
+        ).firstWhere((s) => s.id == 'qc-ortho');
+        expect(quebec.bounds, isNotNull, reason: name);
+        expect(quebec.bounds!.northeast.latitude, lessThanOrEqualTo(52.0));
+        // New Brunswick reaches 48.07 N, and the service renders it flat. The
+        // east edge has to stop short of it rather than make a province of
+        // three-quarters of a million people look like missing data.
+        expect(quebec.bounds!.northeast.longitude, lessThanOrEqualTo(-69.0));
+        // The 45th parallel is the border. South of it is Vermont and New York.
+        expect(quebec.bounds!.southwest.latitude, greaterThanOrEqualTo(45.0));
+      }
+    });
+
+    // Both provinces' rectangles overlap along the Ottawa River, and only one
+    // of them can be on top. Ontario's imagery is sharper, covers its whole
+    // province, and 404s cleanly where it stops, so it wins the overlap.
+    test('Ontario imagery draws over Quebec imagery, not under it', () {
+      for (final name in ['satellite', 'hybrid']) {
+        final layers = (json.decode(readStyle(name))
+                as Map<String, dynamic>)['layers'] as List;
+        final ids = layers
+            .cast<Map<String, dynamic>>()
+            .map((layer) => layer['id'])
+            .toList();
+        expect(
+          ids.indexOf('satellite-qc'),
+          lessThan(ids.indexOf('satellite-on')),
+          reason: name,
         );
       }
     });
@@ -141,6 +185,20 @@ void main() {
       final sources = (pruned['sources'] as Map).keys.toSet();
       expect(sources, contains('sentinel2'));
       expect(sources, isNot(contains('on-ortho')));
+      expect(sources, contains('qc-ortho'), reason: 'this area is in Quebec');
+    });
+
+    // The mirror of the test above, and the one that actually saves bytes:
+    // Quebec's service answers outside its footprint with an opaque placeholder
+    // and a 200, so an Ontario area that kept it would cache tiles of nothing.
+    test('drops the Quebec source for an area deep in Ontario', () {
+      final northwestOntario = box(-92.0, 49.0, -91.0, 50.0);
+      final pruned = json.decode(
+        pruneStyleToArea(readStyle('satellite'), northwestOntario),
+      ) as Map<String, dynamic>;
+      final sources = (pruned['sources'] as Map).keys.toSet();
+      expect(sources, containsAll(['on-ortho', 'sentinel2']));
+      expect(sources, isNot(contains('qc-ortho')));
     });
 
     test('drops the layers that used the pruned source', () {

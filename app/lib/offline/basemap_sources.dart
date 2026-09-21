@@ -17,7 +17,8 @@ import 'tile_math.dart';
 const Map<String, int> _averageTileBytes = {
   'openmaptiles': 55 * 1024,
   'sentinel2': 14 * 1024,
-  'on-ortho': 22 * 1024,
+  'on-ortho': 23 * 1024,
+  'qc-ortho': 20 * 1024,
   'ne2_shaded': 8 * 1024,
 };
 
@@ -126,6 +127,11 @@ LatLngBounds? _boundsFrom(Object? raw) {
 /// otherwise spend the whole download asking Ontario's imagery server for tiles
 /// it does not have. Pruning first keeps the request count honest and keeps us
 /// off a provincial server that owes us nothing.
+///
+/// It also keeps junk out of the cache. Ontario answers outside its coverage
+/// with a 404, which caches as nothing, but Quebec's service answers with an
+/// opaque 2 KB placeholder and HTTP 200, so an unpruned Ontario download would
+/// quietly pay for thousands of tiles of nothing.
 String pruneStyleToArea(String styleJson, LatLngBounds area) {
   final style = json.decode(styleJson) as Map<String, dynamic>;
   final sources = (style['sources'] as Map<String, dynamic>?) ?? const {};

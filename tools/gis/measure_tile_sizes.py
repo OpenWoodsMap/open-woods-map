@@ -19,17 +19,24 @@ import requests
 # Spread across the kind of country this app is actually used in: a city, a
 # town, farmland, near-north bush and far-north bush. Averaging over only
 # Toronto would overstate every pack a hunter downloads.
+# Each carries the province it is actually in. A longitude test cannot tell them
+# apart: Ottawa, Bancroft and Algonquin all sit east of Quebec's western edge
+# and north of its southern one, so a bounding-box guess files them under
+# Quebec and samples the wrong provincial server for them.
 SAMPLES = [
-    ("Toronto", -79.38, 43.65),
-    ("Ottawa", -75.70, 45.42),
-    ("Peterborough", -78.32, 44.31),
-    ("Bancroft bush", -77.85, 45.06),
-    ("Algonquin", -78.38, 45.58),
-    ("Sudbury", -80.99, 46.49),
-    ("Hearst bush", -83.67, 49.69),
-    ("Red Lake bush", -93.79, 51.03),
-    ("Gatineau", -75.77, 45.55),
-    ("Saguenay", -71.07, 48.43),
+    ("Toronto", -79.38, 43.65, "on"),
+    ("Ottawa", -75.70, 45.42, "on"),
+    ("Peterborough", -78.32, 44.31, "on"),
+    ("Bancroft bush", -77.85, 45.06, "on"),
+    ("Algonquin", -78.38, 45.58, "on"),
+    ("Sudbury", -80.99, 46.49, "on"),
+    ("Hearst bush", -83.67, 49.69, "on"),
+    ("Red Lake bush", -93.79, 51.03, "on"),
+    ("Gatineau", -75.77, 45.55, "qc"),
+    ("Saguenay", -71.07, 48.43, "qc"),
+    ("Mauricie bush", -73.20, 46.95, "qc"),
+    ("Abitibi bush", -78.50, 48.50, "qc"),
+    ("Cote-Nord bush", -68.50, 50.10, "qc"),
 ]
 
 SOURCES = {
@@ -48,9 +55,19 @@ SOURCES = {
         "/LIO_Imagery/Ontario_Imagery_Web_Map_Service/MapServer/tile/{z}/{y}/{x}",
         "zooms": [10, 12, 14, 16],
     },
+    "qc_ortho": {
+        "template": "https://servicesmatriciels.mern.gouv.qc.ca/erdas-iws/ogc"
+        "/wmts/Inventaire_Ecoforestier/Inventaire_Ecoforestier/default"
+        "/GoogleMapsCompatibleExt2:epsg:3857/{z}/{y}/{x}.jpg",
+        "zooms": [10, 12, 14, 16],
+    },
 }
 
-ONTARIO_ONLY = {"on_ortho"}
+# Sampling a provincial service outside its province would not fail loudly for
+# Quebec, which is the trap: it answers everywhere with HTTP 200, serving a flat
+# 2 KB placeholder outside its footprint. Those pass every check below and drag
+# the median to a fraction of the truth, so the estimator would promise a
+# download it cannot deliver. Ontario's own service 404s there and self-corrects.
 
 
 def tile_xy(lon: float, lat: float, zoom: int) -> tuple[int, int]:
@@ -61,8 +78,7 @@ def tile_xy(lon: float, lat: float, zoom: int) -> tuple[int, int]:
     return x, y
 
 
-def in_quebec(lon: float, lat: float) -> bool:
-    return lon > -79.9 and lat > 44.9
+PROVINCE_ONLY = {"on_ortho": "on", "qc_ortho": "qc"}
 
 
 def sample(name: str, spec: dict) -> None:
@@ -73,8 +89,8 @@ def sample(name: str, spec: dict) -> None:
         print(f"  (resolved {name} -> {template})", file=sys.stderr)
 
     sizes: list[int] = []
-    for place, lon, lat in SAMPLES:
-        if name in ONTARIO_ONLY and in_quebec(lon, lat):
+    for place, lon, lat, province in SAMPLES:
+        if PROVINCE_ONLY.get(name) not in (None, province):
             continue
         for zoom in spec["zooms"]:
             x, y = tile_xy(lon, lat, zoom)

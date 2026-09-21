@@ -855,11 +855,13 @@ pixels.
 | Layer | Source | Zoom | License |
 |-------|--------|------|---------|
 | Ontario orthophotography | [Ontario Imagery Web Map Service](https://data.ontario.ca/dataset/open-ontario-imagery) (LIO) | to z19 | Open Government Licence – Ontario |
-| Global fallback | Sentinel-2 cloudless © EOX | to z14 | CC BY-NC-SA / Copernicus |
+| Quebec orthophotography | MRNF [`Inventaire_Ecoforestier`](https://www.donneesquebec.ca/recherche/dataset/98e6ddb5-e933-4145-aa76-6db89e9372cf) WMTS | to z18 | CC BY 4.0 |
+| Global fallback | Sentinel-2 cloudless 2024 © EOX | to z14 | CC BY-NC-SA 4.0 / Copernicus |
 
 Ontario returns 404 outside its coverage so the fallback shows through cleanly.
+Quebec does not, which is why it is bounded; see below.
 
-### Quebec orthophotography was removed, and why it is not coming back cheaply
+### The Quebec imagery service was replaced, not restored
 
 Both imagery styles used to carry MRNF's `Imagerie_Continue` WMTS, and this table
 used to record its licence as "Licence ouverte du Québec". Neither was right. The
@@ -867,22 +869,62 @@ ministry's own [catalogue page](https://mrnf.gouv.qc.ca/repertoire-geographique/
 lists the licence as **Sans objet** and states that the service address "n'est pas
 diffusée et ne peut être utilisée", being intended only for viewing inside the
 government's own interactive maps. So the app was using an endpoint its owner says
-may not be used, and asserting a grant that does not exist to justify it.
+may not be used, and asserting a grant that does not exist to justify it. It was
+removed, and `basemap_sources_test.dart` now fails if anything names it again.
 
-The cost of removing it is real and worth stating plainly: Quebec now stops at
-Sentinel-2's z14, about 6.7 m per pixel, where the ortho ran to z20 at 5 cm to
-50 cm. Past z14 the fallback is stretched rather than absent, so the map still
-draws — it just stops resolving individual trees, cut lines and clearings. Hybrid
-loses none of its roads, trails, water or labels, because those are OpenStreetMap
-vectors rather than imagery.
+What ships instead is a different MRNF service, `Inventaire_Ecoforestier`: the
+aerial mosaic flown for the ecoforest inventory, 20 cm to 30 cm, covering
+"la quasi-totalité du territoire au sud du 52e parallèle de la forêt publique du
+Québec" in the service's own words. It passes the test the old one failed, on
+four counts:
 
-There is no drop-in replacement. Quebec's open imagery
-([mosaïques orthophotographiques](https://www.donneesquebec.ca/recherche/dataset/imagerie-aerienne-mosaiques-orthophotographiques),
-CC BY 4.0) is distributed as GeoTIFF and JPEG 2000 downloads, not as a tile
-service, and this project has no server to tile them on. Whether the WMS listed
-beside that dataset serves the imagery itself or only the download index has not
-been checked. A written answer from MRNF is the cheaper path; `geoboutique@mrnf.gouv.qc.ca`
-is the published contact.
+- Données Québec records the licence as **Attribution (CC-BY 4.0)**, and the
+  federal [Open Government Portal](https://open.canada.ca/data/dataset/98e6ddb5-e933-4145-aa76-6db89e9372cf)
+  mirror says "Creative Commons 4.0 Attribution (CC-BY) licence – Quebec".
+- The address is *published*, by the ministry itself, in
+  [Procédure pour utiliser un service de cartographie Web](https://mrnf.gouv.qc.ca/documents/forets/inventaire/Procedure_service_Web.pdf),
+  which tells readers to paste it into QGIS or ArcGIS Pro. It is also listed as
+  a resource on both dataset records above.
+- Its own `GetCapabilities` reports `Fees: None` and `AccessConstraints: None`.
+- MRNF built this product to be licence-clean: imagery acquired under
+  partnerships was excluded "en raison de leur licence de diffusion plus
+  restrictive" and replaced with inventory imagery.
+
+The dataset is marked "accessible en visualisation seulement", which describes
+the absence of a bulk download for this mosaic rather than a restriction added on
+top of CC BY 4.0 — that licence grants reproduction outright. Caching tiles for
+offline viewing therefore looks permitted, but it has been raised in writing with
+MRNF rather than assumed, alongside the question below.
+
+**Why it is bounded to `[-79.6, 45.0, -69.0, 52.0]`.** The service declares a
+worldwide bounding box and never returns a 404. Outside its aerial footprint it
+answers HTTP 200 with an opaque flat tile of roughly 2 KB, so without a rectangle
+of our own it would paint blank imagery over Sentinel-2 across the continent, and
+an Ontario offline area would pay to cache thousands of those. PNG is served
+undocumented but is fully opaque too, at ten times the bytes, so transparency is
+not an escape. The edges were each measured against the live service:
+
+| Edge | Why there |
+|------|-----------|
+| north 52.0 | Matches the ministry's own coverage statement. Aerial is sharp to about 51.2 N and patchy above it, where gaps fall back to a coarser satellite backdrop |
+| south 45.0 | The 45th parallel is the border. Vermont and New York render flat |
+| east −69.0 | New Brunswick reaches 48.07 N and renders flat. No rectangle can include Quebec's south shore and exclude it, so the east edge stops short instead of making a Canadian province look like missing data |
+| west −79.6 | Quebec's western limit. The rectangle necessarily overlaps eastern Ontario, which is harmless because `satellite-on` draws above `satellite-qc` and Ontario's coverage was verified complete at every sampled point, out to Moosonee and the Hudson Bay lowland |
+
+Two consequences are worth stating plainly rather than discovering later. Inside
+the rectangle, northern Maine west of −69 renders as a flat tile; it is outside
+this app's geography, and the alternative was dropping Beauce and Bas-Saint-Laurent.
+And Gaspé, Anticosti and the eastern Côte-Nord lie east of −69, so they keep
+Sentinel-2 as before: no regression, just not yet improved. Extending there needs
+a second rectangle that dodges New Brunswick, Newfoundland and the open Gulf.
+
+The global fallback is **CC BY-NC-SA 4.0**, not CC BY: per
+[EOX's capabilities document](https://tiles.maps.eox.at/wmts/1.0.0/WMTSCapabilities.xml)
+every yearly mosaic from 2018 on carries the NonCommercial and ShareAlike terms,
+and only the 2016 and 2017 layers are plain CC BY 4.0. The app is free, carries no
+advertising and sells nothing, so NonCommercial is satisfied — but it is a real
+constraint on this project rather than a footnote, because charging for the app
+later would mean changing this layer first.
 
 `basemap_sources_test.dart` asserts no bundled style names that host, so the
 endpoint cannot come back by accident without the licence question being settled.

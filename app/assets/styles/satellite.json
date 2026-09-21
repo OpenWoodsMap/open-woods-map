@@ -8,8 +8,19 @@
         "https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/g/{z}/{y}/{x}.jpg"
       ],
       "tileSize": 256,
-      "attribution": "Sentinel-2 cloudless © EOX (modified Copernicus Sentinel data)",
+      "attribution": "Sentinel-2 cloudless 2024 by EOX IT Services GmbH (contains modified Copernicus Sentinel data), CC BY-NC-SA 4.0",
       "maxzoom": 14
+    },
+    "qc-ortho": {
+      "type": "raster",
+      "tiles": [
+        "https://servicesmatriciels.mern.gouv.qc.ca/erdas-iws/ogc/wmts/Inventaire_Ecoforestier/Inventaire_Ecoforestier/default/GoogleMapsCompatibleExt2:epsg:3857/{z}/{y}/{x}.jpg"
+      ],
+      "tileSize": 256,
+      "attribution": "Mosaïque d'orthophotographies de l'inventaire écoforestier © Gouvernement du Québec, CC BY 4.0",
+      "bounds": [-79.6, 45.0, -69.0, 52.0],
+      "minzoom": 8,
+      "maxzoom": 18
     },
     "on-ortho": {
       "type": "raster",
@@ -28,6 +39,12 @@
       "id": "satellite-global",
       "type": "raster",
       "source": "sentinel2"
+    },
+    {
+      "id": "satellite-qc",
+      "type": "raster",
+      "source": "qc-ortho",
+      "minzoom": 8
     },
     {
       "id": "satellite-on",
