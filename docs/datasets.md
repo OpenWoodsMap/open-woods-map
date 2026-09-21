@@ -879,6 +879,21 @@ keeps working because the TileJSON that names those URLs is saved with it, but a
 saved Streets or Hybrid area will not pick up a newer planet without being saved
 again.
 
+### Nothing the user brings is a source of ours
+
+Maps added under My maps are the user's own, and their licence is between the
+user and whoever drew the map. Nothing about them is bundled, uploaded or
+redistributed, which is why they carry a free-text credit field instead of the
+`source` / `license` / `license_url` trio every shipped layer has: the app cannot
+verify a claim about somebody else's file and should not pretend to.
+
+The one such file in this repo's orbit is a test fixture, not a dataset.
+`tools/gis/build_custom_map_fixture.py` builds a Garmin Custom Map KMZ of the
+Canoe Lake area of Algonquin from NRCan's Toporama WMS
+([Open Government Licence – Canada](https://open.canada.ca/en/open-government-licence-canada))
+so the import path can be exercised against a real multi-tile file. It writes
+into `tools/gis/_tmp_custom_map/`, which is gitignored, and ships with nothing.
+
 ### Tile weights
 
 `tools/gis/measure_tile_sizes.py` samples each endpoint across city, farmland

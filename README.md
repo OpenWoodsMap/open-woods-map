@@ -106,6 +106,8 @@ Build a sideload APK: [docs/android_apk.md](docs/android_apk.md).
   detail level you choose, with the size estimated before you commit and the
   overlap with anything already saved deducted from it
 - **Province packs:** download from GitHub Releases or import a ZIP on device
+- **My maps:** bring your own imagery, either a Garmin Custom Map KMZ from the
+  phone or an XYZ tile URL, drawn over the basemap and under the land layers
 
 ### Province packs
 
@@ -144,6 +146,24 @@ the map still zooms in past that, it just stops gaining detail.
 | Provincial parks | ~340 |
 | WMUs | ~150 |
 | Hunting seasons | 21 species across 150 WMUs |
+
+### My maps
+
+Paper and PDF maps of a park or a management unit are often better than any
+basemap for the ground they cover, and the people who draw them usually publish
+a Garmin Custom Map KMZ — a zip of JPEG tiles with corner coordinates, which is
+close enough to what MapLibre draws that the phone needs no conversion step.
+Import one and it works with no signal. An XYZ tile URL works too, and does not.
+
+Both draw above the basemap and below every land layer, because imagery is
+something to read the ground by and tenure is the answer this app exists to
+give. Where two of your own maps cover the same ground, the one higher in the
+list wins.
+
+What is deliberately not supported: WMS addresses, GeoTIFF and MBTiles files.
+The first asks for a picture of a bounding box rather than numbered tiles, and
+the other two would mean reprojecting and re-tiling gigabytes on a phone. All
+three are refused by name rather than failing quietly.
 
 ## Docs
 

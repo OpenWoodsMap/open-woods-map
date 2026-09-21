@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 // Re-exports AndroidSettings and ForegroundNotificationConfig, so asking for the
 // Android foreground service needs no platform-specific import. The call site
 // checks the platform before building one.
+import 'package:collection/collection.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -38,6 +39,9 @@ import '../waypoints/waypoint_store.dart';
 import '../waypoints/waypoints_page.dart';
 import 'basemap.dart';
 import 'basemap_panel.dart';
+import 'custom_map.dart';
+import 'custom_map_panel.dart';
+import 'custom_map_store.dart';
 import 'fix_accuracy.dart';
 import 'land_info.dart';
 import 'land_info_sheet.dart';
@@ -81,6 +85,14 @@ class _MapShellState extends State<MapShell> {
   late final _waypoints = WaypointStore(snapshots: _snapshots);
   final _display = DisplaySettings();
   final _visibility = VisibilitySettings();
+  final _customMaps = CustomMapStore();
+
+  /// The custom-map layers in the *current* style, source id to layer id.
+  ///
+  /// Held because which of them belong on the map changes as the camera moves:
+  /// an imported map is a grid of images and only the ones on screen are worth
+  /// the memory. See [maxDrawnOverlays].
+  final _customLayers = <String, String>{};
 
   /// The SDF glyphs, kept so a basemap swap does not re-read fifteen assets.
   final _iconBytes = <String, Uint8List>{};
@@ -201,6 +213,7 @@ class _MapShellState extends State<MapShell> {
     super.initState();
     _display.addListener(_onDisplayChanged);
     _visibility.addListener(_onVisibilityChanged);
+    _customMaps.addListener(_onCustomMapsChanged);
     _bootstrap();
   }
 
@@ -209,8 +222,10 @@ class _MapShellState extends State<MapShell> {
     _positionSubscription?.cancel();
     _display.removeListener(_onDisplayChanged);
     _visibility.removeListener(_onVisibilityChanged);
+    _customMaps.removeListener(_onCustomMapsChanged);
     _display.dispose();
     _visibility.dispose();
+    _customMaps.dispose();
     super.dispose();
   }
 
@@ -239,6 +254,12 @@ class _MapShellState extends State<MapShell> {
     _syncWaypointSource();
   }
 
+  void _onCustomMapsChanged() {
+    if (!mounted) return;
+    setState(() {});
+    _syncCustomMaps();
+  }
+
   Future<void> _bootstrap() async {
     try {
       // Started before the assets so the fix overlaps with the file reads.
@@ -259,6 +280,7 @@ class _MapShellState extends State<MapShell> {
       // at the size the user chose rather than at the default and then again.
       await _display.loadPreferences();
       await _visibility.loadPreferences();
+      await _customMaps.loadPreferences();
       final prefs = await SharedPreferences.getInstance();
       final tipDismissed = prefs.getBool(_landInfoTipDismissedKey) ?? false;
       // Both fall back rather than validating, because a province can be
@@ -608,6 +630,7 @@ class _MapShellState extends State<MapShell> {
             onSelected: (item) => switch (item) {
               _MapMenuItem.measure => _startMeasuring(),
               _MapMenuItem.wind => _showWind(),
+              _MapMenuItem.myMaps => _showCustomMaps(),
               _MapMenuItem.offlinePacks => _openOfflinePacks(),
               _MapMenuItem.settings => _openSettings(),
             },
@@ -730,6 +753,11 @@ class _MapShellState extends State<MapShell> {
                 _iconsRegistered = false;
                 // Nor any sources. See [_putGeoJson].
                 _geoJsonSources.clear();
+                _customLayers.clear();
+                // Before the overlays, so a borrowed map is drawn under the
+                // tenure fills rather than over the answer the app is here to
+                // give. See [_syncCustomMaps].
+                await _syncCustomMaps();
                 await _attachLayers();
                 await _syncWaypointSource();
                 await _syncActiveTrackSource();
@@ -755,6 +783,11 @@ class _MapShellState extends State<MapShell> {
                 _camera = position;
                 _noteMapRotation(position.bearing);
               },
+              // Imported maps are grids of images and only the ones on screen
+              // are held, so the set has to be reconsidered once the map settles.
+              // On idle rather than on move: each change is a platform call that
+              // decodes a JPEG, and doing that per frame of a pan would stutter.
+              onCameraIdle: _syncCustomMaps,
               onMapClick: _identify,
               // The gesture every map app uses for "put something here". A tap
               // cannot be it: a tap has to stay the identify gesture, which is
@@ -1456,6 +1489,171 @@ class _MapShellState extends State<MapShell> {
     } catch (error) {
       if (mounted) setState(() => _error = 'Could not draw overlays: $error');
     }
+  }
+
+  /// Prefix for every source and layer a custom map owns, so they can be told
+  /// apart from the app's own and from the basemap's.
+  static const _customPrefix = 'owm-custom-';
+
+  /// Draws the user's own maps, and takes down the parts that no longer belong.
+  ///
+  /// Runs on every style load and on every camera idle, because for an imported
+  /// map the answer changes with the view: the file is a grid of images and only
+  /// the ones on screen are worth holding. Idle rather than move, because each
+  /// change decodes a JPEG on the platform side.
+  ///
+  /// Both kinds end up as raster layers. A MapLibre `image` source — four corner
+  /// coordinates and a bitmap — is drawn by a raster layer exactly as a tile
+  /// source is, which is what lets one opacity slider work for both.
+  ///
+  /// The list is the stack: the first map the user added is the bottom one, so
+  /// the newest lands on top where a newly added layer is expected to land.
+  Future<void> _syncCustomMaps() async {
+    final map = _map;
+    if (!_styleReady || map == null) return;
+    if (_customMaps.maps.isEmpty && _customLayers.isEmpty) return;
+
+    final wanted = <String, _CustomLayer>{};
+    // Only asked for when there is an imported map to cull, since it is a round
+    // trip to the platform and a tile URL covers whatever it covers.
+    GeoBox? view;
+    for (final custom in _customMaps.drawn) {
+      switch (custom) {
+        case TileMap tiles:
+          wanted['$_customPrefix${tiles.id}'] = _CustomLayer(
+            map: tiles,
+            tiles: tiles,
+          );
+        case FileMap file:
+          view ??= await _visibleBox(map);
+          for (final overlay in overlaysToDraw(file.overlays, view)) {
+            wanted['$_customPrefix${file.id}-${overlay.href}'] = _CustomLayer(
+              map: file,
+              overlay: overlay,
+            );
+          }
+      }
+    }
+
+    for (final sourceId in _customLayers.keys.toList()) {
+      if (wanted.containsKey(sourceId)) continue;
+      await _dropCustomLayer(map, sourceId);
+    }
+
+    // Everything the user's maps draw goes below the app's own layers. A bought
+    // map is imagery to read the ground by; the tenure fills are the answer this
+    // app exists to give, and they are not allowed to end up underneath it.
+    final appAnchor = await _lowestAppLayer(map);
+    // Each layer names the drawn neighbour it belongs under rather than all of
+    // them naming the app's lowest layer. Two maps over the same ground have to
+    // stack the way the list reads, and that cannot rest on how MapLibre breaks
+    // a tie between layers inserted below the same anchor.
+    //
+    // Top of the stack first, so the layer above is already on the map and can
+    // be named. Bottom-up would leave every layer with nothing above it yet and
+    // fall back to the app anchor for all of them, which is the tie again.
+    final order = wanted.keys.toList();
+    for (var i = order.length - 1; i >= 0; i--) {
+      final sourceId = order[i];
+      if (_customLayers.containsKey(sourceId)) continue;
+      final anchor =
+          order
+              .skip(i + 1)
+              .map((above) => _customLayers[above])
+              .firstWhereOrNull((layerId) => layerId != null) ??
+          appAnchor;
+      try {
+        await wanted[sourceId]!.addTo(map, sourceId, anchor, _customMaps);
+        _customLayers[sourceId] = '$sourceId-layer';
+      } catch (error) {
+        // One unreadable tile must not take the rest of the map down with it,
+        // and it is already visible as a hole. Logged rather than raised for the
+        // same reason the overlay controller tolerates a missing source: this
+        // runs on camera idle, and an error banner on every pan would be worse
+        // than the gap.
+        debugPrint('Custom map layer $sourceId failed: $error');
+      }
+    }
+  }
+
+  Future<void> _dropCustomLayer(
+    MapLibreMapController map,
+    String sourceId,
+  ) async {
+    final layerId = _customLayers.remove(sourceId);
+    try {
+      if (layerId != null) await map.removeLayer(layerId);
+      await map.removeSource(sourceId);
+    } catch (_) {
+      // A style reload already took it, which is the ordinary case on a basemap
+      // swap and not worth reporting.
+    }
+  }
+
+  /// The bottom-most layer the app itself added, for inserting custom maps under.
+  ///
+  /// Asked of the map rather than remembered, because what is lowest depends on
+  /// whether a pack is installed and on the order this style happened to load
+  /// things in. Null when the app has drawn nothing yet, in which case a custom
+  /// map goes on top of the basemap and the overlays land above it afterwards.
+  Future<String?> _lowestAppLayer(MapLibreMapController map) async {
+    for (final id in await map.getLayerIds()) {
+      final name = '$id';
+      if (name.startsWith('owm-') && !name.startsWith(_customPrefix)) {
+        return name;
+      }
+    }
+    return null;
+  }
+
+  /// The view, widened so a tile is fetched a little before it is needed.
+  ///
+  /// Padding is what stops a slow pan from showing bare basemap at the leading
+  /// edge for as long as a JPEG takes to decode.
+  Future<GeoBox> _visibleBox(MapLibreMapController map) async {
+    final bounds = await map.getVisibleRegion();
+    final latPad = (bounds.northeast.latitude - bounds.southwest.latitude) / 4;
+    final lonPad = (bounds.northeast.longitude - bounds.southwest.longitude) / 4;
+    return GeoBox(
+      north: bounds.northeast.latitude + latPad,
+      south: bounds.southwest.latitude - latPad,
+      east: bounds.northeast.longitude + lonPad,
+      west: bounds.southwest.longitude - lonPad,
+    );
+  }
+
+  void _showCustomMaps() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => CustomMapPanel(
+        store: _customMaps,
+        onShow: _frameCustomMap,
+      ),
+    );
+  }
+
+  /// Puts the camera over an imported map's coverage.
+  ///
+  /// The whole of it, with room around the edges, because the question being
+  /// answered is "did this land where I expected" and that needs the edges in
+  /// shot as much as the middle.
+  Future<void> _frameCustomMap(GeoBox extent) async {
+    final map = _map;
+    if (map == null) return;
+    await map.animateCamera(
+      CameraUpdate.newLatLngBounds(
+        LatLngBounds(
+          southwest: LatLng(extent.south, extent.west),
+          northeast: LatLng(extent.north, extent.east),
+        ),
+        left: 24,
+        right: 24,
+        top: 24,
+        bottom: 24,
+      ),
+    );
   }
 
   Future<void> _syncWaypointSource() async {
@@ -2740,12 +2938,72 @@ class _MapShellState extends State<MapShell> {
   }
 }
 
+/// One source and layer a custom map needs on the map right now.
+///
+/// A value rather than a closure so the wanted set can be compared against
+/// what is already drawn without adding anything, which is what makes a camera
+/// idle over unchanged ground cost nothing.
+class _CustomLayer {
+  const _CustomLayer({required this.map, this.tiles, this.overlay});
+
+  final CustomMap map;
+
+  /// Set for a tile URL; [overlay] is set for one image of an imported map.
+  final TileMap? tiles;
+  final GroundOverlay? overlay;
+
+  Future<void> addTo(
+    MapLibreMapController controller,
+    String sourceId,
+    String? anchor,
+    CustomMapStore store,
+  ) async {
+    final tiles = this.tiles;
+    if (tiles != null) {
+      await controller.addSource(
+        sourceId,
+        RasterSourceProperties(
+          tiles: [tiles.template],
+          tileSize: 256,
+          maxzoom: tiles.maxZoom.toDouble(),
+          // MapLibre draws this itself, which is the point: a borrowed basemap
+          // should name its owner on screen and not only in a settings list.
+          attribution: tiles.credit.isEmpty ? null : tiles.credit,
+        ),
+      );
+    } else {
+      final overlay = this.overlay!;
+      final bytes = await store.imageBytes(map.id, overlay.href);
+      if (bytes == null) {
+        throw StateError('Image ${overlay.href} is missing from ${map.name}');
+      }
+      await controller.addImageSource(
+        sourceId,
+        bytes,
+        LatLngQuad(
+          topLeft: LatLng(overlay.box.north, overlay.box.west),
+          topRight: LatLng(overlay.box.north, overlay.box.east),
+          bottomRight: LatLng(overlay.box.south, overlay.box.east),
+          bottomLeft: LatLng(overlay.box.south, overlay.box.west),
+        ),
+      );
+    }
+    await controller.addRasterLayer(
+      sourceId,
+      '$sourceId-layer',
+      RasterLayerProperties(rasterOpacity: map.opacity),
+      belowLayerId: anchor,
+    );
+  }
+}
+
 /// The screens reached from the map's overflow menu rather than from a button.
 enum _MapMenuItem {
   // Two map tools, then the two screens you leave the map for, with a divider
   // between them in the menu.
   measure(label: 'Measure a distance', icon: Icons.straighten),
   wind(label: 'Wind where I am', icon: Icons.air),
+  myMaps(label: 'My maps', icon: Icons.add_photo_alternate_outlined),
   offlinePacks(label: 'Offline packs', icon: Icons.offline_bolt_outlined),
   settings(label: 'Settings', icon: Icons.tune);
 

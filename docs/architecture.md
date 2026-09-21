@@ -38,6 +38,31 @@ Province packs are static ZIPs (`manifest.json`, `overlays/`, optional `policies
 
 The app hands MapLibre a `file://` path per layer and never parses overlay geometry itself. Decoding a layer in Dart and passing it over the platform channel copies every feature onto the Android heap as well — for Ontario's 42.7k Crown parcels that overruns the per-app heap cap and kills the process. Layer-wide facts (tenure, accuracy, basis notes) come from the `metadata` object at the head of each file, read without touching the geometry behind it.
 
+## My maps (user-supplied imagery)
+
+Two kinds, one code path. A Garmin Custom Map KMZ is unzipped once into
+`custom_maps/{id}/`; each of its `GroundOverlay` images becomes a MapLibre
+`image` source, four corner coordinates and a bitmap. An XYZ tile URL becomes a
+`raster` source. Both are drawn by a raster layer, which is what lets one
+opacity slider serve both.
+
+An imported file is a grid, so only the images near the view are held: overlays
+are culled on camera idle and capped at `maxDrawnOverlays`, because each one
+decodes a JPEG on the platform side and a full 1:20,000 sheet is more bitmaps
+than a phone will hold at once. Idle rather than every camera move, for the same
+reason.
+
+Layer order is stated rather than inherited. Every custom layer names the drawn
+neighbour it belongs under, added from the top of the stack down, so two maps
+over the same ground stack the way the list reads instead of however MapLibre
+happens to break a tie between layers inserted below one anchor. The whole band
+sits below the lowest `owm-` layer.
+
+A tile URL that resolves but serves nothing draws an empty layer and cannot be
+told from a bug, so `checkTileUrl` refuses what a bad paste actually looks like
+— whitespace inside the URL, two addresses glued together, WMS parameters, `{s}`
+server rotation — by name, at the dialog, while the cause is still on screen.
+
 ## Waypoints
 
 - Stored **locally only** (device storage). Never uploaded or synced.
