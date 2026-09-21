@@ -849,17 +849,43 @@ Same layer slots as ON/QC when added; use Alberta Open Government datasets.
 ## Basemap imagery
 
 The satellite basemap stacks government orthophotography over a global fallback,
-so zooming in over ON/QC shows real aerial detail instead of 10 m satellite pixels.
+so zooming in over Ontario shows real aerial detail instead of 10 m satellite
+pixels.
 
 | Layer | Source | Zoom | License |
 |-------|--------|------|---------|
 | Ontario orthophotography | [Ontario Imagery Web Map Service](https://data.ontario.ca/dataset/open-ontario-imagery) (LIO) | to z19 | Open Government Licence – Ontario |
-| Quebec orthophotography | MRNF `Imagerie_Continue` WMTS | to z20 | Licence ouverte du Québec |
 | Global fallback | Sentinel-2 cloudless © EOX | to z14 | CC BY-NC-SA / Copernicus |
 
 Ontario returns 404 outside its coverage so the fallback shows through cleanly.
-Quebec returns a flat placeholder tile in coverage gaps, so its source is bounded
-to Quebec and drawn beneath Ontario's.
+
+### Quebec orthophotography was removed, and why it is not coming back cheaply
+
+Both imagery styles used to carry MRNF's `Imagerie_Continue` WMTS, and this table
+used to record its licence as "Licence ouverte du Québec". Neither was right. The
+ministry's own [catalogue page](https://mrnf.gouv.qc.ca/repertoire-geographique/vue-aerienne-quebec-imagerie-continue/)
+lists the licence as **Sans objet** and states that the service address "n'est pas
+diffusée et ne peut être utilisée", being intended only for viewing inside the
+government's own interactive maps. So the app was using an endpoint its owner says
+may not be used, and asserting a grant that does not exist to justify it.
+
+The cost of removing it is real and worth stating plainly: Quebec now stops at
+Sentinel-2's z14, about 6.7 m per pixel, where the ortho ran to z20 at 5 cm to
+50 cm. Past z14 the fallback is stretched rather than absent, so the map still
+draws — it just stops resolving individual trees, cut lines and clearings. Hybrid
+loses none of its roads, trails, water or labels, because those are OpenStreetMap
+vectors rather than imagery.
+
+There is no drop-in replacement. Quebec's open imagery
+([mosaïques orthophotographiques](https://www.donneesquebec.ca/recherche/dataset/imagerie-aerienne-mosaiques-orthophotographiques),
+CC BY 4.0) is distributed as GeoTIFF and JPEG 2000 downloads, not as a tile
+service, and this project has no server to tile them on. Whether the WMS listed
+beside that dataset serves the imagery itself or only the download index has not
+been checked. A written answer from MRNF is the cheaper path; `geoboutique@mrnf.gouv.qc.ca`
+is the published contact.
+
+`basemap_sources_test.dart` asserts no bundled style names that host, so the
+endpoint cannot come back by accident without the licence question being settled.
 
 ### Vector map data
 

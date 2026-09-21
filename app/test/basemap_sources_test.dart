@@ -19,10 +19,7 @@ void main() {
   group('sourceSpecsFromStyle', () {
     test('reads the bundled satellite style', () {
       final specs = sourceSpecsFromStyle(readStyle('satellite'));
-      expect(
-        specs.map((s) => s.id).toSet(),
-        {'sentinel2', 'on-ortho', 'qc-ortho'},
-      );
+      expect(specs.map((s) => s.id).toSet(), {'sentinel2', 'on-ortho'});
       final sentinel = specs.firstWhere((s) => s.id == 'sentinel2');
       expect(sentinel.maxZoom, 14);
       expect(sentinel.bounds, isNull, reason: 'Sentinel-2 is worldwide');
@@ -60,6 +57,21 @@ void main() {
             reason: '$name/${spec.id}',
           );
         }
+      }
+    });
+
+    // MRNF publishes this service as licence "Sans objet" and says the address
+    // "n'est pas diffusée et ne peut être utilisée". It was shipped for a while
+    // on the mistaken belief that the Quebec open licence covered it. Removing
+    // it cost Quebec everything above Sentinel-2's z14, which makes it exactly
+    // the kind of thing someone puts back without rechecking the licence.
+    test('no style names the Quebec imagery service', () {
+      for (final name in ['satellite', 'hybrid']) {
+        expect(
+          readStyle(name),
+          isNot(contains('servicesmatriciels')),
+          reason: 'see docs/datasets.md on Quebec orthophotography',
+        );
       }
     });
   });
@@ -121,41 +133,37 @@ void main() {
 
   group('pruneStyleToArea', () {
     test('drops a provincial source the area cannot reach', () {
-      final northwestOntario = box(-94.0, 50.0, -93.0, 51.0);
+      // Well east of Ontario's -74.2 edge, so only the worldwide source is left.
+      final centralQuebec = box(-72.0, 46.0, -71.0, 47.0);
       final pruned = json.decode(
-        pruneStyleToArea(readStyle('satellite'), northwestOntario),
+        pruneStyleToArea(readStyle('satellite'), centralQuebec),
       ) as Map<String, dynamic>;
       final sources = (pruned['sources'] as Map).keys.toSet();
-      expect(sources, contains('on-ortho'));
       expect(sources, contains('sentinel2'));
-      expect(
-        sources,
-        isNot(contains('qc-ortho')),
-        reason: 'Quebec imagery starts east of -79.9',
-      );
+      expect(sources, isNot(contains('on-ortho')));
     });
 
     test('drops the layers that used the pruned source', () {
-      final northwestOntario = box(-94.0, 50.0, -93.0, 51.0);
+      final centralQuebec = box(-72.0, 46.0, -71.0, 47.0);
       final pruned = json.decode(
-        pruneStyleToArea(readStyle('satellite'), northwestOntario),
+        pruneStyleToArea(readStyle('satellite'), centralQuebec),
       ) as Map<String, dynamic>;
       final layerSources = (pruned['layers'] as List)
           .cast<Map<String, dynamic>>()
           .map((l) => l['source'])
           .whereType<String>()
           .toSet();
-      expect(layerSources, isNot(contains('qc-ortho')));
-      expect(layerSources, contains('on-ortho'));
+      expect(layerSources, isNot(contains('on-ortho')));
+      expect(layerSources, contains('sentinel2'));
     });
 
-    test('keeps both provinces where they meet', () {
+    test('keeps a provincial source the area overlaps', () {
       final ottawaRiver = box(-76.0, 45.2, -75.4, 45.6);
       final pruned = json.decode(
         pruneStyleToArea(readStyle('satellite'), ottawaRiver),
       ) as Map<String, dynamic>;
       final sources = (pruned['sources'] as Map).keys.toSet();
-      expect(sources, containsAll(['on-ortho', 'qc-ortho', 'sentinel2']));
+      expect(sources, containsAll(['on-ortho', 'sentinel2']));
     });
 
     test('the pruned style is still a valid style document', () {

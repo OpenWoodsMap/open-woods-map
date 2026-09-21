@@ -98,10 +98,9 @@ Build a sideload APK: [docs/android_apk.md](docs/android_apk.md).
 - Opens on your own position, once per launch. If location is off or refused it
   falls back to the province without complaining, and switching basemaps keeps
   the view exactly where you left it
-- Basemaps: offline / streets / satellite / hybrid. Satellite is provincial
-  aerial photography over Ontario and Quebec with global Sentinel-2 elsewhere;
-  hybrid stacks OpenFreeMap's roads, watercourses, boundaries and place names
-  on top of it
+- Basemaps: offline / streets / satellite / hybrid. Satellite is Ontario aerial
+  photography with global Sentinel-2 elsewhere, Quebec included; hybrid stacks
+  OpenFreeMap's roads, watercourses, boundaries and place names on top of it
 - **Basemap areas:** save the ground you actually use for offline use, at a
   detail level you choose, with the size estimated before you commit and the
   overlap with anything already saved deducted from it

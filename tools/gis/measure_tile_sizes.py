@@ -48,16 +48,9 @@ SOURCES = {
         "/LIO_Imagery/Ontario_Imagery_Web_Map_Service/MapServer/tile/{z}/{y}/{x}",
         "zooms": [10, 12, 14, 16],
     },
-    "qc_ortho": {
-        "template": "https://servicesmatriciels.mern.gouv.qc.ca/erdas-iws/ogc/wmts"
-        "/Imagerie_Continue/Imagerie_GQ/default/GoogleMapsCompatibleExt2:epsg:3857"
-        "/{z}/{y}/{x}.jpg",
-        "zooms": [10, 12, 14, 16],
-    },
 }
 
 ONTARIO_ONLY = {"on_ortho"}
-QUEBEC_ONLY = {"qc_ortho"}
 
 
 def tile_xy(lon: float, lat: float, zoom: int) -> tuple[int, int]:
@@ -82,8 +75,6 @@ def sample(name: str, spec: dict) -> None:
     sizes: list[int] = []
     for place, lon, lat in SAMPLES:
         if name in ONTARIO_ONLY and in_quebec(lon, lat):
-            continue
-        if name in QUEBEC_ONLY and not in_quebec(lon, lat):
             continue
         for zoom in spec["zooms"]:
             x, y = tile_xy(lon, lat, zoom)

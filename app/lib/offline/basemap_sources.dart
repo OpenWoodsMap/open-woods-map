@@ -10,15 +10,14 @@ import 'tile_math.dart';
 
 /// Median bytes per tile, measured against the live endpoints by
 /// `tools/gis/measure_tile_sizes.py` over a spread of city, farmland and bush
-/// samples in Ontario and Quebec. Medians rather than means: a handful of dense
-/// urban tiles drag the mean far above anything a hunting pack contains.
+/// samples. Medians rather than means: a handful of dense urban tiles drag the
+/// mean far above anything a hunting pack contains.
 ///
 /// Re-run the script and update these if a source changes.
 const Map<String, int> _averageTileBytes = {
   'openmaptiles': 55 * 1024,
   'sentinel2': 14 * 1024,
   'on-ortho': 22 * 1024,
-  'qc-ortho': 13 * 1024,
   'ne2_shaded': 8 * 1024,
 };
 
@@ -39,9 +38,9 @@ const int _labelledStyleOverheadBytes = 3 * 1024 * 1024;
 
 /// The most detail an area can be saved at.
 ///
-/// Imagery quadruples in size per level and the provincial orthophotography
-/// runs to z19/z20, which would let someone start a download measured in tens
-/// of gigabytes by accident.
+/// Imagery quadruples in size per level and Ontario's orthophotography runs to
+/// z19, which would let someone start a download measured in tens of gigabytes
+/// by accident.
 const int maxOfflineZoom = 16;
 
 /// The floor for every saved area. Zoomed-out tiles are so few that including
@@ -123,8 +122,8 @@ LatLngBounds? _boundsFrom(Object? raw) {
 /// the layers that used them.
 ///
 /// MapLibre walks every source in a style when it downloads a region and
-/// ignores each source's `bounds` while doing it, so an area in Ontario would
-/// otherwise spend the whole download asking Quebec's imagery server for tiles
+/// ignores each source's `bounds` while doing it, so an area in Quebec would
+/// otherwise spend the whole download asking Ontario's imagery server for tiles
 /// it does not have. Pruning first keeps the request count honest and keeps us
 /// off a provincial server that owes us nothing.
 String pruneStyleToArea(String styleJson, LatLngBounds area) {

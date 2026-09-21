@@ -13,22 +13,6 @@
       "attribution": "Sentinel-2 cloudless © EOX (modified Copernicus Sentinel data)",
       "maxzoom": 14
     },
-    "qc-ortho": {
-      "type": "raster",
-      "tiles": [
-        "https://servicesmatriciels.mern.gouv.qc.ca/erdas-iws/ogc/wmts/Imagerie_Continue/Imagerie_GQ/default/GoogleMapsCompatibleExt2:epsg:3857/{z}/{y}/{x}.jpg"
-      ],
-      "tileSize": 256,
-      "attribution": "Imagerie orthorectifiée © Gouvernement du Québec (MRNF)",
-      "bounds": [
-        -79.9,
-        44.9,
-        -56.9,
-        62.7
-      ],
-      "minzoom": 8,
-      "maxzoom": 20
-    },
     "on-ortho": {
       "type": "raster",
       "tiles": [
@@ -55,12 +39,6 @@
       "id": "satellite-global",
       "type": "raster",
       "source": "sentinel2"
-    },
-    {
-      "id": "satellite-qc",
-      "type": "raster",
-      "source": "qc-ortho",
-      "minzoom": 8
     },
     {
       "id": "satellite-on",
