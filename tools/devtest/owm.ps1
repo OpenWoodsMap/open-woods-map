@@ -275,7 +275,32 @@ function Cmd-Install {
     }
     $age = [math]::Round(((Get-Date) - $apk.LastWriteTime).TotalMinutes)
     "Installing $($apk.Name), $([math]::Round($apk.Length / 1MB, 1)) MB, built $age minute$(if ($age -ne 1) { 's' }) ago..."
-    Invoke-Adb @('install', '-r', '-d', $apk.FullName)
+    # adb reports a refused install as a Failure line on stdout and still exits
+    # 0, so an unchecked install is silent. Everything after it then describes a
+    # build that never reached the device, which is the one way this harness can
+    # manufacture a confident wrong answer.
+    $out = Invoke-Adb @('install', '-r', '-d', $apk.FullName) | Out-String
+    if ($out -match 'INSTALL_FAILED_UPDATE_INCOMPATIBLE') {
+        # A local build is signed with your own key and a published one with the
+        # repository secret, and neither can replace the other in place.
+        # Uninstalling is the only way through, and it wipes that device's
+        # waypoints, packs and saved areas — so it is offered, not done.
+        throw "Refused: the app on the device was signed with a different key.`n" +
+              "Uninstall it first, which wipes its data on this device:`n" +
+              "  $Adb -s $Serial uninstall $Package"
+    }
+    if ($out -notmatch 'Success') { throw "Install failed:`n$out" }
+    # Asked of the device rather than inferred from adb saying Success, because
+    # the version on screen is the only thing that proves which code the
+    # screenshots after this are showing.
+    $wanted = if ((Get-Content (Join-Path $Repo 'app\pubspec.yaml') -Raw) -match
+        '(?m)^version:\s*([0-9.]+)') { $Matches[1] } else { '' }
+    $got = if ((Invoke-Adb @('shell', 'dumpsys', 'package', $Package) |
+        Out-String) -match 'versionName=(\S+)') { $Matches[1] } else { '' }
+    if ($wanted -and $got -ne $wanted) {
+        throw "Installed $Package reports $got, but app/pubspec.yaml says $wanted."
+    }
+    "Installed $Package $got."
 }
 
 function Cmd-Grant {

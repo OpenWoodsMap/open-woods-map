@@ -123,6 +123,23 @@ evidence from one run, not repo content.
   showed the old binary. It now installs whichever of the two is newer and prints
   the build's age, so read that line — an install that says "58 minutes ago" is a
   build you forgot to run.
+- **A refused install is silent, and everything after it describes the wrong
+  binary.** `adb install` prints `Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE]`
+  on stdout and still exits 0, so the harness used to sail past it. The app then
+  launches, screenshots come back looking healthy, and they show whatever build
+  was already on the device. This cost an hour once: a panel that had been on the
+  device since September was missing a row added afterwards, which reads exactly
+  like a layout bug, and the widget test that said the row was on screen looked
+  like the test being wrong rather than the device being stale.
+
+  The cause is signing, not the APK. A local build carries your own key and a
+  published one carries the repository secret, so neither can replace the other
+  in place. `install` now names that case and stops, because the way through is
+  to uninstall first and that wipes the device's waypoints, packs and saved
+  areas — a decision that is not the harness's to make. It also reads
+  `versionName` back off the device and compares it against `app/pubspec.yaml`,
+  so an install that quietly does nothing fails here rather than at the far end
+  of a reading of the wrong screenshots.
 - **A minimized `-gpu host` emulator stops producing frames.** `screencap` then
   returns the same stale image indefinitely while the device keeps running: the
   clock inside the capture freezes while `adb shell date` advances. `boot`
