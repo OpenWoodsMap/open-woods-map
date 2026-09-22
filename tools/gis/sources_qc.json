@@ -1,8 +1,8 @@
 {
   "province": "qc",
   "name": "Quebec",
-  "license": "Licence-ouverte-Quebec",
-  "license_url": "https://www.donneesquebec.ca/fr/licence/",
+  "license": "CC-BY 4.0 / Données ouvertes du Québec",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
   "attribution": "Données ouvertes du gouvernement du Québec; limites Statistics Canada sous licence ouverte Statistics Canada.",
   "layers": {
     "crown_land": {

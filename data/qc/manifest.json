@@ -3,9 +3,9 @@
   "name": "Quebec",
   "version": "0.1.0",
   "crs": "EPSG:4326",
-  "license": "Licence-ouverte-Quebec",
-  "license_url": "https://www.donneesquebec.ca/fr/licence/",
-  "note": "Province-wide open layers: GAGQ hunting zones, TRQ parks/ZECs/outfitters, StatsCan 2021 CSD municipalities. Quebec does not publish an open Crown tenure parcel fabric, so the green layer shows managed hunting territories rather than public land ownership. No policy documents are bundled; consult official Quebec sources.",
+  "license": "CC-BY 4.0 / Données ouvertes du Québec",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
+  "note": "Province-wide open layers: TRQ parks/ZECs/outfitters and StatsCan 2021 CSD municipalities. GAGQ hunting zones are not shipped; Quebec does not license them for redistribution. Quebec does not publish an open Crown tenure parcel fabric either, so the green layer shows managed hunting territories rather than public land ownership. No policy documents are bundled; consult official Quebec sources. The licence above is only a fallback for ground no layer covers: each layer carries its own, and the municipalities come from Statistics Canada under a different one.",
   "layers": [
     {
       "id": "crown_land",

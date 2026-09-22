@@ -395,6 +395,20 @@ class LoadedLayer {
 
   String? get note => metadata['note']?.toString();
 
+  /// This layer's own licence, which is not always the province's.
+  ///
+  /// Four of Ontario's layers are federal and carry the Open Government Licence
+  /// – Canada, and none of Quebec's carry the licence its manifest names. Each
+  /// licence obliges us to name its own provider, so the card credits from here
+  /// rather than from the province. See [creditLines].
+  String? get license => metadata['license']?.toString();
+
+  String? get licenseUrl => metadata['license_url']?.toString();
+
+  /// The credit the licence specifies, where the source gave us one to use
+  /// verbatim rather than leaving us to word it.
+  String? get attribution => metadata['attribution']?.toString();
+
   /// What this layer says about a parcel that is under water, in its own words,
   /// including how coarse the hydrography behind the flag is.
   String? get waterNote => metadata['water_note']?.toString();

@@ -14,6 +14,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../backup/snapshot_store.dart';
+import '../data/land_credit.dart';
 import '../data/models.dart';
 import '../data/province_loader.dart';
 import '../offline/basemap_area_store.dart';
@@ -2640,13 +2641,12 @@ class _MapShellState extends State<MapShell> {
     final data = _provinceData;
     // Queried once, at the moment the screen point still means this ground, and
     // handed to the sheet later if the user asks for it.
+    final hits = data == null ? const <LandFeature>[] : await _hitsAt(map, point);
     final info = LandInfo(
       latitude: coordinates.latitude,
       longitude: coordinates.longitude,
-      hits: data == null ? const [] : await _hitsAt(map, point),
-      attribution: data == null
-          ? ''
-          : '${data.manifest.license}. ${data.manifest.licenseUrl}',
+      hits: hits,
+      attribution: data == null ? '' : _creditFor(hits, data),
     );
     await _setIdentifyPin(coordinates);
     if (!mounted) return;
@@ -2700,10 +2700,18 @@ class _MapShellState extends State<MapShell> {
         latitude: coordinates.latitude,
         longitude: coordinates.longitude,
         hits: hits,
-        attribution: '${data.manifest.license}. ${data.manifest.licenseUrl}',
+        attribution: _creditFor(hits, data),
       ),
     );
   }
+
+  /// Credits the sources the card is actually showing. See [landCredit].
+  String _creditFor(List<LandFeature> hits, ProvinceData data) => landCredit(
+        hits,
+        data.layers,
+        provinceLicense: data.manifest.license,
+        provinceLicenseUrl: data.manifest.licenseUrl,
+      );
 
   /// The full card for hits already in hand.
   ///
