@@ -88,12 +88,17 @@ class _MapShellState extends State<MapShell> {
   final _visibility = VisibilitySettings();
   final _customMaps = CustomMapStore();
 
-  /// The custom-map layers in the *current* style, source id to layer id.
+  /// The custom-map layers in the *current* style, source id to what is drawn.
   ///
   /// Held because which of them belong on the map changes as the camera moves:
   /// an imported map is a grid of images and only the ones on screen are worth
   /// the memory. See [maxDrawnOverlays].
-  final _customLayers = <String, String>{};
+  ///
+  /// The opacity travels with the layer id because it is the one thing about an
+  /// already-drawn layer that can go stale. Comparing it against the store is
+  /// what tells a camera idle over unchanged ground, which should cost nothing,
+  /// apart from a slider move, which has to reach the map.
+  final _customLayers = <String, ({String layerId, double opacity})>{};
 
   /// The SDF glyphs, kept so a basemap swap does not re-read fifteen assets.
   final _iconBytes = <String, Uint8List>{};
@@ -1603,16 +1608,37 @@ class _MapShellState extends State<MapShell> {
     final order = wanted.keys.toList();
     for (var i = order.length - 1; i >= 0; i--) {
       final sourceId = order[i];
-      if (_customLayers.containsKey(sourceId)) continue;
+      final layer = wanted[sourceId]!;
+      if (_customLayers[sourceId] case final drawn?) {
+        // Repainted in place rather than removed and re-added. Dropping the
+        // source is what the user had to do by hand — uncheck the map and check
+        // it again — and it throws away every tile already fetched, so a few
+        // nudges of the slider would re-ask a stranger's server for ground it
+        // had already sent.
+        if (drawn.opacity != layer.map.opacity) {
+          await map.setLayerProperties(
+            drawn.layerId,
+            _CustomLayer.paintFor(layer.map),
+          );
+          _customLayers[sourceId] = (
+            layerId: drawn.layerId,
+            opacity: layer.map.opacity,
+          );
+        }
+        continue;
+      }
       final anchor =
           order
               .skip(i + 1)
-              .map((above) => _customLayers[above])
+              .map((above) => _customLayers[above]?.layerId)
               .firstWhereOrNull((layerId) => layerId != null) ??
           appAnchor;
       try {
-        await wanted[sourceId]!.addTo(map, sourceId, anchor, _customMaps);
-        _customLayers[sourceId] = '$sourceId-layer';
+        await layer.addTo(map, sourceId, anchor, _customMaps);
+        _customLayers[sourceId] = (
+          layerId: '$sourceId-layer',
+          opacity: layer.map.opacity,
+        );
       } catch (error) {
         // One unreadable tile must not take the rest of the map down with it,
         // and it is already visible as a hole. Logged rather than raised for the
@@ -1628,7 +1654,7 @@ class _MapShellState extends State<MapShell> {
     MapLibreMapController map,
     String sourceId,
   ) async {
-    final layerId = _customLayers.remove(sourceId);
+    final layerId = _customLayers.remove(sourceId)?.layerId;
     try {
       if (layerId != null) await map.removeLayer(layerId);
       await map.removeSource(sourceId);
@@ -3075,6 +3101,15 @@ class _CustomLayer {
   final TileMap? tiles;
   final GroundOverlay? overlay;
 
+  /// How a custom map is painted, in one place because two paths need it: the
+  /// first draw, and a later opacity change applied to the layer already there.
+  ///
+  /// It has to stay one place. `setLayerProperties` sends null properties rather
+  /// than skipping them, so anything added here but missing from the update call
+  /// would silently reset to its default the first time the slider moved.
+  static RasterLayerProperties paintFor(CustomMap map) =>
+      RasterLayerProperties(rasterOpacity: map.opacity);
+
   Future<void> addTo(
     MapLibreMapController controller,
     String sourceId,
@@ -3114,7 +3149,7 @@ class _CustomLayer {
     await controller.addRasterLayer(
       sourceId,
       '$sourceId-layer',
-      RasterLayerProperties(rasterOpacity: map.opacity),
+      paintFor(map),
       belowLayerId: anchor,
     );
   }
