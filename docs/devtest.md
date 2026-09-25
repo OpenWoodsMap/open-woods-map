@@ -87,6 +87,12 @@ across an open keyboard glide-types into the focused field, and dragging inside 
 scrollable sheet is fine but dragging over the map pans it. Dismiss the keyboard
 with `back` before any swipe meant to scroll.
 
+With more than one device attached, the script prefers the `owm_test` emulator,
+then the first device that answers a shell. To pin a different one, set
+`$env:OWM_SERIAL` (for example `$env:OWM_SERIAL = 'emulator-5556'`) for the
+session. There is no `-Serial` option: the script refuses any option it does not
+declare rather than letting it slip through as a stray argument.
+
 Screenshots and logcat land in `.artifacts/`, which is gitignored. They are
 evidence from one run, not repo content.
 

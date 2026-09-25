@@ -3,7 +3,9 @@
 ## Setup
 
 1. Clone the repo.
-2. Install [Flutter 3.29+](https://docs.flutter.dev/get-started/install).
+2. Install [Flutter](https://docs.flutter.dev/get-started/install). CI and
+   releases build with 3.47.2, pinned in `.github/workflows/`; matching it avoids
+   chasing differences that are only the toolchain.
 3. Sync GIS assets: `powershell -File scripts\sync_assets.ps1` (from repo root).
 4. `cd app && flutter pub get`
 5. `flutter run` on an **Android** device/emulator.
@@ -40,7 +42,11 @@ Follow attribute expectations in [datasets.md](datasets.md) for Land Info. Build
 
 ## Data in git
 
-- Keep clones light: prefer sample/regional fixtures in git when possible.
+- Large generated overlays under `data/{cc}/overlays/` are gitignored one by one;
+  a minified 30 MB GeoJSON has no reviewable diff. Small ones stay tracked, so
+  commit those with the manifest when you regenerate.
+- Test fixtures live under `app/test/`. Nothing invented or illustrative goes
+  under `data/`, since everything there can end up in a pack.
 - Full province packs → **GitHub Releases**; link via `packUrl`.
 
 ## PR hygiene
@@ -50,7 +56,8 @@ Follow attribute expectations in [datasets.md](datasets.md) for Land Info. Build
   harness if you want one, but `flutter run` is enough.
 - Note data sources and licenses in the PR description.
 - Do not commit secrets, API keys, or proprietary datasets.
-- `flutter analyze` (and tests) before opening a PR.
+- `flutter analyze` and `flutter test` before opening a PR. CI runs both on every
+  push to main and every pull request, but finding out locally is faster.
 
 ## Constraints
 

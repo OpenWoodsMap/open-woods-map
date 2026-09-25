@@ -528,6 +528,21 @@ function Cmd-Logs {
 
 function Cmd-Shell { Invoke-Adb (@('shell') + $Rest) }
 
+# A named option this script does not declare is not an error here: $Rest takes
+# every remaining argument, so `-Serial emulator-5554` arrives as two positional
+# values. tapshot then read "-Serial" as a coordinate and failed with "The
+# screenshot width has to be positive", which says nothing about the real mistake.
+# A dash followed by a letter is an option, never a coordinate; `gps 45.42 -75.70`
+# still passes. shell, type and tap forward free text, so they are left alone.
+if ($Command -notin 'shell', 'type', 'tap') {
+    $stray = @($Rest | Where-Object { $_ -match '^-[A-Za-z]' })
+    if ($stray) {
+        throw "Unknown option $($stray -join ', ') for '$Command'. This script " +
+              "takes only -Settle and -Windowed. To choose a device, set " +
+              "`$env:OWM_SERIAL instead."
+    }
+}
+
 switch ($Command) {
     'doctor' { Cmd-Doctor }
     'boot' { Cmd-Boot }

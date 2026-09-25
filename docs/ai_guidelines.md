@@ -17,13 +17,20 @@ vendor-neutral location, so they are not tied to one editor.
 - **Chunk tasks** — one layer, one screen, or one doc section per session.
 - **Minimal diffs** — match existing patterns; no speculative abstractions.
 - **Never add** cloud backends, paid map services, login, sync, or AI orchestration layers.
-- **Land Info stays offline** — identify + report sheet + optional bundled PDFs only; no live policy lookup APIs.
+- **Never let a model invent data.** A plausible-looking boundary, season date or
+  policy summary is the worst output this project can receive, because it reads
+  exactly like a real one. If a source cannot supply it, the gap ships.
+- **Land Info answers offline** — identify, the report sheet, and policies from the
+  pack. The Weather tab is the one sanctioned live call: optional, additive, and
+  failing with a plain message rather than degrading the card. No live policy
+  lookup APIs.
 
 ## Review checklist
 
-- [ ] Works offline with bundled/downloaded pack
+- [ ] Core paths work offline with a downloaded pack
 - [ ] No new network dependency for core paths
-- [ ] Province data under `data/{cc}/` conventions
-- [ ] Sample data only in git; large packs documented for Releases
+- [ ] Province data under `data/{cc}/` conventions, with `source`, `license` and `license_url` on every layer
+- [ ] No sample, placeholder or illustrative data in anything that ships; test fixtures stay under `app/test/`
+- [ ] Anything uncertain says so on screen, not only in the commit message
 
 Reject suggestions that trade constraints for convenience.

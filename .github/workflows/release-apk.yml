@@ -76,10 +76,10 @@ jobs:
 
       - name: Check the tag agrees with pubspec
         if: ${{ github.event_name == 'push' }}
-        # The tag names the release and pubspec decides what the app reports about
-        # itself in Settings and in a bug report. If they disagree, every report
-        # from this build cites a version that does not match what people
-        # downloaded, which is the sort of thing you discover months later.
+        # The tag names the release and pubspec decides the versionName Android
+        # reports for the installed app. If they disagree, every report from this
+        # build cites a version that does not match what people downloaded,
+        # which is the sort of thing you discover months later.
         run: |
           set -euo pipefail
           PUBSPEC="$(grep '^version:' app/pubspec.yaml | awk '{print $2}' | cut -d+ -f1)"

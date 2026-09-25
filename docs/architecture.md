@@ -63,10 +63,29 @@ told from a bug, so `checkTileUrl` refuses what a bad paste actually looks like
 — whitespace inside the URL, two addresses glued together, WMS parameters, `{s}`
 server rotation — by name, at the dialog, while the cause is still on screen.
 
-## Waypoints
+## Waypoints and tracks
 
 - Stored **locally only** (device storage). Never uploaded or synced.
-- GPS track recording on mobile.
+- `app/lib/tracks/` records, draws and follows tracks. Following, forwards or in
+  reverse, is pure arithmetic in `track_follow.dart` and `track_math.dart` so
+  the numbers someone trusts in the dark can be tested without a device.
+- Recording keeps working with the screen off only because
+  `map/walking_location.dart` asks Android for a foreground service and a wake
+  lock. Without them the OS stops delivering fixes and a walk records as straight
+  lines between the moments someone looked at the phone. That half is
+  Android-only; [ios.md](ios.md) lists what iOS would need.
+
+## Search
+
+`app/lib/search/` finds places two ways. Names come from the pack's
+`gazetteer/places.json`, built from the Canadian Geographical Names Database by
+`tools/gis/fetch_cgndb.py` and read only when search is first opened, so people
+who never search never pay for loading it. Pasted coordinates go through
+`coordinate_parser.dart`, which accepts other people's notation — decimal
+degrees, decimal minutes, degrees-minutes-seconds, Google Maps place links, UTM
+grid references — and says what it assumed where the input is ambiguous rather
+than quietly picking. Google's short links are refused by name: the point sits
+on Google's servers behind a redirect, which an offline app cannot follow.
 
 ## Land Info (identify)
 
