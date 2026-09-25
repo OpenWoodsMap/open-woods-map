@@ -855,7 +855,7 @@ void main() {
       await tester.tap(find.text('Delete these 1 waypoint'));
       await settle(tester);
       await tester.tap(find.widgetWithText(FilledButton, 'Delete them'));
-      await settle(tester);
+      await settle(tester, until: find.text('UNDO'));
 
       expect(find.textContaining('Nothing carries'), findsNothing);
       expect(find.text('North stand'), findsNWidgets(2));
@@ -886,7 +886,7 @@ void main() {
       await settle(tester);
       expect(find.textContaining('hidden by the filter'), findsOneWidget);
       await tester.tap(find.widgetWithText(FilledButton, 'Delete them'));
-      await settle(tester);
+      await settle(tester, until: find.text('UNDO'));
 
       expect(store.items.map((item) => item.name), ['South stand', 'Spring']);
     });

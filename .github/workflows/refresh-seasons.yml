@@ -97,6 +97,28 @@ jobs:
             git checkout -- data/on/seasons
           fi
 
+      # The pull request below is made with the workflow token, and GitHub does not
+      # start other workflows for events that token causes, so nothing else will
+      # ever check it. The reviewer is left comparing dates by eye, while the app's
+      # parser would quietly turn a malformed date into 1970 and an unknown
+      # residency into "Resident". Holding the scrape to what the app can actually
+      # word has to happen here, before a pull request exists to be waved through.
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.2
+          channel: stable
+          cache: true
+
+      - name: Check the scrape is something the app can show correctly
+        run: |
+          set -euo pipefail
+          mkdir -p app/assets/data
+          cp data/provinces.json app/assets/data/provinces.json
+          cd app
+          flutter pub get
+          flutter test test/seasons_data_test.dart
+
       - name: Open pull request
         uses: peter-evans/create-pull-request@v7
         with:
