@@ -173,6 +173,20 @@ void main() {
       expect(verdict.colour, permitted);
     });
 
+    // Tapping a subdivision in a listed city produced a green "permitted" with
+    // nothing beside it to say the city's discharge bylaw may still forbid it.
+    test('every yes says it is only the Sunday rule', () {
+      for (final properties in [
+        {'basis': 'reg663_part7', 'listed_as': 'Ottawa, City of'},
+        {'basis': 'reg663_part7'},
+        {'basis': 'reg665_s66', 'near_divide': false},
+      ]) {
+        final body = sundayGunVerdict(sunday(properties)).body;
+        expect(body, contains('Sunday rule only'), reason: '$properties');
+        expect(body, contains('discharge bylaw'), reason: '$properties');
+      }
+    });
+
     // The band is the case that has to resist the pull toward a yes. Being on
     // the wrong bank of the Mattawa is an offence, and our line is a digitised
     // channel rather than the water, so the app does not know which bank this

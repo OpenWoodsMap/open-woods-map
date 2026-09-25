@@ -110,4 +110,67 @@ void main() {
       hasLength(1),
     );
   });
+
+  group('merging residencies', () {
+    SeasonEntry deer(
+      Residency residency, {
+      int startDay = 1,
+      String label = 'Bows only',
+      String? huntCode,
+    }) =>
+        SeasonEntry(
+          species: 'white_tailed_deer',
+          speciesName: 'White-tailed deer',
+          group: 'big_game',
+          residency: residency,
+          start: DateTime(2026, 10, startDay),
+          end: DateTime(2026, 11, 1),
+          label: label,
+          huntCode: huntCode,
+        );
+
+    test('an identical resident and non-resident pair becomes one row', () {
+      final merged = mergeResidencies([
+        deer(Residency.resident),
+        deer(Residency.nonResident),
+        deer(Residency.resident, startDay: 2, label: 'Guns'),
+        deer(Residency.nonResident, startDay: 2, label: 'Guns'),
+      ]);
+      expect(merged.map((s) => (s.label, s.residency)), [
+        ('Bows only', Residency.any),
+        ('Guns', Residency.any),
+      ]);
+    });
+
+    test('a pair that differs in anything stays two answers', () {
+      final merged = mergeResidencies([
+        deer(Residency.resident, huntCode: '100'),
+        deer(Residency.nonResident, huntCode: '200'),
+        deer(Residency.resident, startDay: 3),
+        deer(Residency.nonResident, startDay: 4),
+      ]);
+      expect(merged, hasLength(4));
+      expect(merged.where((s) => s.residency == Residency.any), isEmpty);
+    });
+
+    test('a non-resident row listed first is not shown twice', () {
+      final merged = mergeResidencies([
+        deer(Residency.nonResident),
+        deer(Residency.resident),
+      ]);
+      expect(merged.single.residency, Residency.any);
+    });
+
+    test('a resident season with no partner keeps its label', () {
+      final merged = mergeResidencies([
+        deer(Residency.resident),
+        deer(Residency.resident, startDay: 2),
+        deer(Residency.nonResident),
+      ]);
+      expect(merged.map((s) => s.residency), [
+        Residency.any,
+        Residency.resident,
+      ]);
+    });
+  });
 }

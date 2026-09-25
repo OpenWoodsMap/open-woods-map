@@ -58,6 +58,74 @@ class SeasonEntry {
   int daysUntilClose(DateTime day) => end.difference(day).inDays;
 }
 
+/// Folds a resident row and a non-resident row that agree on everything else
+/// into one row for both.
+///
+/// Ontario publishes most deer and moose seasons twice, once per residency,
+/// with identical dates and weapons, which doubled the length of every big game
+/// card. Only an exact match on every other field merges: a pair that differs
+/// in anything, a hunt code or a limit, is two answers and stays as two rows.
+/// Order is kept, with the merged row where the first of the pair was.
+List<SeasonEntry> mergeResidencies(List<SeasonEntry> seasons) {
+  String key(SeasonEntry s) => [
+        s.species,
+        s.speciesName,
+        s.group,
+        s.start.toIso8601String(),
+        s.end.toIso8601String(),
+        s.label,
+        s.limits,
+        s.huntCode,
+        s.notes,
+        s.allYear,
+      ].join('\u0000');
+
+  final unmatched = <String, List<int>>{};
+  for (final (index, season) in seasons.indexed) {
+    if (season.residency == Residency.nonResident) {
+      unmatched.putIfAbsent(key(season), () => []).add(index);
+    }
+  }
+
+  // Both halves of a pair point at each other, so whichever comes first in the
+  // list emits the merged row and the other is skipped.
+  final partnerOf = <int, int>{};
+  for (final (index, season) in seasons.indexed) {
+    if (season.residency != Residency.resident) continue;
+    final partners = unmatched[key(season)];
+    if (partners == null || partners.isEmpty) continue;
+    final partner = partners.removeAt(0);
+    partnerOf[index] = partner;
+    partnerOf[partner] = index;
+  }
+
+  final emitted = <int>{};
+  final merged = <SeasonEntry>[];
+  for (final (index, season) in seasons.indexed) {
+    if (emitted.contains(index)) continue;
+    final partner = partnerOf[index];
+    if (partner == null) {
+      merged.add(season);
+      continue;
+    }
+    emitted.add(partner);
+    merged.add(SeasonEntry(
+      species: season.species,
+      speciesName: season.speciesName,
+      group: season.group,
+      residency: Residency.any,
+      start: season.start,
+      end: season.end,
+      label: season.label,
+      limits: season.limits,
+      huntCode: season.huntCode,
+      notes: season.notes,
+      allYear: season.allYear,
+    ));
+  }
+  return merged;
+}
+
 class ProvinceSeasons {
   ProvinceSeasons({
     required this.province,

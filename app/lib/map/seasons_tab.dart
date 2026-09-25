@@ -120,10 +120,17 @@ class _SeasonsTabState extends State<SeasonsTab> {
             tabAlignment: TabAlignment.start,
             labelColor: const Color(0xFF1B4332),
             indicatorColor: const Color(0xFF1B4332),
+            // One card per species, so the counts are species too.
             tabs: [
-              Tab(text: 'OPEN NOW (${buckets[SeasonStatus.open]!.length})'),
-              Tab(text: 'UPCOMING (${buckets[SeasonStatus.upcoming]!.length})'),
-              Tab(text: 'CLOSED (${buckets[SeasonStatus.closed]!.length})'),
+              for (final (label, status) in [
+                ('OPEN NOW', SeasonStatus.open),
+                ('UPCOMING', SeasonStatus.upcoming),
+                ('CLOSED', SeasonStatus.closed),
+              ])
+                Tab(
+                  text: '$label '
+                      '(${buckets[status]!.map((s) => s.species).toSet().length})',
+                ),
             ],
           ),
           Expanded(
@@ -317,7 +324,9 @@ class _SpeciesCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sorted = [...seasons]..sort((a, b) => a.start.compareTo(b.start));
+    final sorted = mergeResidencies(
+      [...seasons]..sort((a, b) => a.start.compareTo(b.start)),
+    );
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 0,

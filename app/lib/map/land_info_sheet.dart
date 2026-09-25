@@ -75,8 +75,12 @@ class _LandInfoReport extends StatelessWidget {
     final wmuId = info.wmuId;
     final unitSeasons = seasons?.forUnit(wmuId) ?? const <SeasonEntry>[];
     final today = DateUtils.dateOnly(DateTime.now());
+    // Species, not rows: deer alone is ten rows, and the count reads as how
+    // many things are open to hunt.
     final openCount = unitSeasons
         .where((season) => season.statusOn(today) == SeasonStatus.open)
+        .map((season) => season.species)
+        .toSet()
         .length;
 
     return DefaultTabController(
@@ -281,8 +285,11 @@ Widget _line(String label, String value) => Padding(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(
-            width: 130,
+          // The gutter is inside the column so a label that fills it, as
+          // "Local government" does, still does not touch its value.
+          Container(
+            width: 142,
+            padding: const EdgeInsets.only(right: 12),
             child:
                 Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
           ),
@@ -718,6 +725,13 @@ SundayGunVerdict sundayGunVerdict(LandFeature? feature) {
       'Sunday gun hunting only in the area south of the French and Mattawa '
       'rivers';
 
+  // A green "permitted" in the middle of a subdivision reads as permission to
+  // shoot there. This section answers the provincial Sunday rule and nothing
+  // else, so every yes names the two things that most often still say no.
+  const onlyTheSundayRule = ' This answers the Sunday rule only: a municipal '
+      'firearm discharge bylaw can still forbid shooting here, and private '
+      'land still needs the owner\'s permission.';
+
   if (feature == null) {
     return const SundayGunVerdict(
       headline: 'Not permitted here on Sundays',
@@ -736,8 +750,15 @@ SundayGunVerdict sundayGunVerdict(LandFeature? feature) {
     final listedAs = feature.properties['listed_as']?.toString();
     return SundayGunVerdict(
       headline: 'Permitted here during open seasons',
-      body: 'This point is inside ${listedAs ?? 'a listed municipality'}, '
-          'which is scheduled for Sunday gun hunting.',
+      // Quoted because the schedule's own form, "Ottawa, City of", reads as a
+      // typo when run into a sentence, and it is what to search the regulation
+      // for.
+      body: (listedAs == null
+              ? 'This point is inside a municipality the regulation schedules '
+                  'for Sunday gun hunting.'
+              : 'This point is inside the municipality the regulation '
+                  'schedules for Sunday gun hunting as "$listedAs".') +
+          onlyTheSundayRule,
       colour: permitted,
       icon: Icons.check_circle_outline,
     );
@@ -760,7 +781,7 @@ SundayGunVerdict sundayGunVerdict(LandFeature? feature) {
     headline: 'Permitted here during open seasons',
     body: 'This point is north of the French and Mattawa rivers. The Sunday '
         'prohibition reaches only south of them, so no municipal listing is '
-        'needed here.',
+        'needed here.$onlyTheSundayRule',
     colour: permitted,
     icon: Icons.check_circle_outline,
     citation: prohibition,
