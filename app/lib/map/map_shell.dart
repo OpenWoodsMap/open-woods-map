@@ -267,6 +267,10 @@ class _MapShellState extends State<MapShell> {
     // from its own source and would otherwise keep its old arrow size until
     // following stopped.
     _syncWaypointSource().then((_) => _syncFollowSource());
+    final map = _map;
+    if (map != null && _geoJsonSources.contains('owm-active-track')) {
+      _addActiveTrackMarkers(map);
+    }
   }
 
   void _onVisibilityChanged() {
@@ -2232,7 +2236,12 @@ class _MapShellState extends State<MapShell> {
         if (_activeTrack.length >= 2)
           {
             'type': 'Feature',
-            'properties': const {'kind': 'active-track'},
+            'properties': {
+              'kind': 'active-track',
+              'colour': _activeTrackColour,
+              'arrow': markerHexFor(const Color(0xFFD32F2F)),
+              'marker': TrackMarker.arrow.image,
+            },
             'geometry': {
               'type': 'LineString',
               'coordinates': [
@@ -2248,18 +2257,46 @@ class _MapShellState extends State<MapShell> {
         map,
         'owm-active-track',
         data,
-        () => map.addLineLayer(
-          'owm-active-track',
-          'owm-active-track-line',
-          const LineLayerProperties(
-            lineColor: '#D32F2F',
-            lineWidth: 5,
-            lineOpacity: 0.95,
-          ),
-        ),
+        () async {
+          await map.addLineLayer(
+            'owm-active-track',
+            'owm-active-track-line',
+            const LineLayerProperties(
+              lineColor: _activeTrackColour,
+              lineWidth: 5,
+              lineOpacity: 0.95,
+            ),
+          );
+          await _addActiveTrackMarkers(map);
+        },
       );
     } catch (_) {
       // A style change can race a position update; the next update resyncs it.
+    }
+  }
+
+  static const _activeTrackColour = '#D32F2F';
+  static const _activeTrackMarkerLayer = 'owm-active-track-markers';
+
+  /// Arrows along the track being recorded, which way it has been walked.
+  ///
+  /// The coordinates are appended in the order they were walked, so the same
+  /// line-placed layer that orients a saved track orients this one. Replaced
+  /// rather than added so a change of marker size reaches it mid-recording.
+  /// Failing here costs only the arrows, and must not take the line with it:
+  /// the line is the record of where the user has been.
+  Future<void> _addActiveTrackMarkers(MapLibreMapController map) async {
+    try {
+      await map.removeLayer(_activeTrackMarkerLayer);
+    } catch (_) {}
+    try {
+      await _addTrackMarkerLayer(
+        map,
+        source: 'owm-active-track',
+        layer: _activeTrackMarkerLayer,
+      );
+    } catch (error) {
+      _toast('Track direction markers could not be drawn: $error');
     }
   }
 
