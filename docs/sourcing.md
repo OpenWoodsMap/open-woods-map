@@ -124,6 +124,12 @@ words the answer correctly, which still needs a device pass — see
   data in the app. We use the **territoires récréatifs (TRQ)** product instead,
   which is CC-BY 4.0 and whose Données Québec package lists our exact REST
   endpoint among its own distributions.
+- **Do not cut a boundary before simplifying it.** Simplifying afterwards moves
+  the cut edges independently and they stop meeting; that produced 1,015 slivers
+  along the divide, each one a false "not permitted".
+- **Do not round coordinates after validating them.** Rounding can push a ring
+  onto itself. Round first, then validate, using the finer-grid ladder in
+  `geomutil.quantized_valid` so a parcel is never deleted for being small.
 
 ### Checking a licence properly, when the portal fights you
 
@@ -141,9 +147,25 @@ https://www.donneesquebec.ca/recherche/api/3/action/resource_search?query=url:<h
 dataset publishes the endpoint I am actually calling", rather than "which dataset
 sounds like the thing I want". That is how the TRQ licence was tied to our own URL,
 and how the hunting zones were shown to have no dataset behind them at all.
-- **Do not cut a boundary before simplifying it.** Simplifying afterwards moves
-  the cut edges independently and they stop meeting; that produced 1,015 slivers
-  along the divide, each one a false "not permitted".
-- **Do not round coordinates after validating them.** Rounding can push a ring
-  onto itself. Round first, then validate, using the finer-grid ladder in
-  `geomutil.quantized_valid` so a parcel is never deleted for being small.
+
+## WMS services, for when one is wanted
+
+The app accepts XYZ tile URLs only, and My maps refuses a WMS address by name.
+That is a choice, not a MapLibre limit. MapLibre Native fills
+`{bbox-epsg-3857}` in a raster tile template, in the same place in core
+(`Resource::tile()`) that fills `{z}`, `{x}`, `{y}` and `{quadkey}`. The literal
+token is present in the `libmaplibre.so` that `maplibre_gl` 0.27.1 pins. Offline
+downloads use the same code path, so a WMS source would cache like any other.
+
+Two caveats. The box is computed on a 256-pixel grid, so the query's `WIDTH` and
+`HEIGHT` have to match the source's `tileSize`, or the server returns a
+stretched image. And all of this comes from source, documentation and the
+binary; no WMS source has been rendered on a device yet.
+
+The candidate it would unlock is **NRCan Toporama**, Canada-wide topographic
+mapping. Its GetCapabilities licenses the service itself under OGL-Canada ("can
+be accessed at no cost and without restrictions"), with no bulk or caching
+clause. It serves transparent PNG, useful from z12 to z17. The catch is speed:
+0.7 to 1.8 s per tile, which is painful for a 256-tile offline area. There is no
+XYZ or WMTS path to it; `maps.geogratis.gc.ca/wmts/...` returns 404. The My maps
+test fixture already comes from this service (see `datasets.md`).

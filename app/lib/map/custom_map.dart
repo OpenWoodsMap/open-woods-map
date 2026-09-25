@@ -308,9 +308,11 @@ TileUrlCheck checkTileUrl(String input) {
 
   // Named rather than lumped in with "no placeholders", because a template with
   // {bbox} or {left} in it is a *working WMS* URL and the user has not made a
-  // mistake so much as brought the other kind of service. MapLibre's raster
-  // source speaks only XYZ, so this is a limit of the app, and it should say so
-  // in those terms.
+  // mistake so much as brought the other kind of service. This is a limit of
+  // the app, not of MapLibre, and the message says so in those terms: MapLibre
+  // Native fills {bbox-epsg-3857} itself, but on a 256-pixel grid, so a pasted
+  // WMS URL would also need its WIDTH and HEIGHT to match, and no WMS source has
+  // been checked on a device. docs/sourcing.md has what was established.
   if (RegExp(r'\{(bbox|left|bottom|right|top|tilesize|width|height)\}',
           caseSensitive: false)
       .hasMatch(template)) {
