@@ -268,14 +268,102 @@ class _LandTab extends StatelessWidget {
         const Divider(),
         Text(
           'Map results are informational and may be incomplete. Verify current '
-          'regulations, posted notices, ownership, and boundaries before use.'
-          '\n\n${info.attribution}',
+          'regulations, posted notices, ownership, and boundaries before use.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Colors.black54,
                 height: 1.35,
               ),
         ),
+        const SizedBox(height: 12),
+        _Credits(info.attribution),
       ],
+    );
+  }
+}
+
+/// The licence credits, with each licence's address tappable.
+///
+/// The address stays written out rather than hidden behind its name: it is part
+/// of the attribution the licence asks for, and a screenshot of the card has to
+/// carry it too.
+class _Credits extends StatelessWidget {
+  const _Credits(this.credits);
+
+  final String credits;
+
+  static final _url = RegExp(r'https?://\S+');
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Colors.black54,
+          height: 1.35,
+        );
+    return Text.rich(
+      TextSpan(
+        style: style,
+        children: [
+          for (final (index, line) in credits.split('\n').indexed) ...[
+            if (index > 0) const TextSpan(text: '\n'),
+            ..._spans(context, line),
+          ],
+        ],
+      ),
+    );
+  }
+
+  List<InlineSpan> _spans(BuildContext context, String line) {
+    final spans = <InlineSpan>[];
+    var at = 0;
+    for (final match in _url.allMatches(line)) {
+      if (match.start > at) {
+        spans.add(TextSpan(text: line.substring(at, match.start)));
+      }
+      final address = match.group(0)!;
+      spans.add(WidgetSpan(
+        alignment: PlaceholderAlignment.baseline,
+        baseline: TextBaseline.alphabetic,
+        // A bare GestureDetector is invisible to a screen reader, which would
+        // hear the address read out with no hint that it can be opened.
+        child: Semantics(
+          link: true,
+          label: address,
+          excludeSemantics: true,
+          onTap: () => _open(context, address),
+          child: GestureDetector(
+            onTap: () => _open(context, address),
+            child: Text(
+              address,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: const Color(0xFF1B4332),
+                    decoration: TextDecoration.underline,
+                    height: 1.35,
+                  ),
+            ),
+          ),
+        ),
+      ));
+      at = match.end;
+    }
+    if (at < line.length) spans.add(TextSpan(text: line.substring(at)));
+    return spans;
+  }
+
+  Future<void> _open(BuildContext context, String address) async {
+    var launched = false;
+    try {
+      launched = await launchUrl(
+        Uri.parse(address),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {
+      launched = false;
+    }
+    if (launched || !context.mounted) return;
+    showMessage(
+      context,
+      'Could not open the licence. $address',
+      behavior: SnackBarBehavior.floating,
     );
   }
 }
@@ -935,7 +1023,11 @@ class _RegulationQuote extends StatelessWidget {
 /// exact, which is the coordinates, the citations and the gaps, and leaves the
 /// wording to the person and their AI. That is also why two people asking the
 /// same ministry about the same parcel do not send it the same letter.
-class _AskAi extends StatelessWidget {
+///
+/// Folded by default. Open, it was most of a screen on every card, and it is
+/// the part of the card someone uses least often; the one line left showing
+/// says what it does and that nothing leaves the phone.
+class _AskAi extends StatefulWidget {
   const _AskAi({
     required this.info,
     required this.manifest,
@@ -945,6 +1037,17 @@ class _AskAi extends StatelessWidget {
   final LandInfo info;
   final ProvinceManifest manifest;
   final Map<String, LoadedLayer> layers;
+
+  @override
+  State<_AskAi> createState() => _AskAiState();
+}
+
+class _AskAiState extends State<_AskAi> {
+  bool _open = false;
+
+  LandInfo get info => widget.info;
+  ProvinceManifest get manifest => widget.manifest;
+  Map<String, LoadedLayer> get layers => widget.layers;
 
   Future<void> _copy(BuildContext context, String text, String what) async {
     await Clipboard.setData(ClipboardData(text: text));
@@ -968,6 +1071,34 @@ class _AskAi extends StatelessWidget {
           'coordinates, records and citations. Paste it into whichever AI you '
           'use. Nothing is sent from this app.',
           style: const TextStyle(height: 1.35),
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            icon: Icon(_open ? Icons.expand_less : Icons.expand_more, size: 20),
+            label: Text(_open ? 'Hide the prompts' : 'Show the prompts'),
+            onPressed: () => setState(() => _open = !_open),
+          ),
+        ),
+        if (_open) ..._contents(context, small, authority),
+      ],
+    );
+  }
+
+  List<Widget> _contents(
+    BuildContext context,
+    TextStyle? small,
+    WildlifeAuthority? authority,
+  ) {
+    return [
+        // Ahead of the buttons rather than after them, so it is read before
+        // anything is copied and not discovered afterwards.
+        const _Warning(
+          'An AI does not know the law and cannot make hunting legal. It will '
+          'sound certain when it is wrong, and the second opinion is the '
+          'flavour most likely to invent a regulation, which is why it is '
+          'marked experimental. Confirm anything that decides where you hunt '
+          'with the authority itself.',
         ),
         const SizedBox(height: 12),
         Wrap(
@@ -1021,16 +1152,7 @@ class _AskAi extends StatelessWidget {
             style: small?.copyWith(color: Colors.black54, height: 1.35),
           ),
         ],
-        const SizedBox(height: 10),
-        const _Warning(
-          'An AI does not know the law and cannot make hunting legal. It will '
-          'sound certain when it is wrong, and the second opinion is the '
-          'flavour most likely to invent a regulation, which is why it is '
-          'marked experimental. Confirm anything that decides where you hunt '
-          'with the authority itself.',
-        ),
-      ],
-    );
+    ];
   }
 }
 

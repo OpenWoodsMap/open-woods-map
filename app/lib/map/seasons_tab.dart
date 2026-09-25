@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/seasons.dart';
 
@@ -26,6 +27,49 @@ class SeasonsTab extends StatefulWidget {
 class _SeasonsTabState extends State<SeasonsTab> {
   String? _group;
   Residency? _residency;
+
+  /// Remembered because it is a fact about the hunter, not a passing filter:
+  /// someone who is a resident is one on every card they open. The chip that
+  /// sets it is the only control for it, and it sits first in the row, so a
+  /// remembered choice is always on screen beside the seasons it is hiding.
+  static const _residencyKey = 'seasons.residency';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadResidency();
+  }
+
+  Future<void> _loadResidency() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final stored = switch (prefs.getString(_residencyKey)) {
+        'resident' => Residency.resident,
+        'non_resident' => Residency.nonResident,
+        _ => null,
+      };
+      if (mounted && stored != null) setState(() => _residency = stored);
+    } on Exception {
+      // No stored choice is a correct state; showing every row is the default.
+    }
+  }
+
+  Future<void> _setResidency(Residency? value) async {
+    setState(() => _residency = value);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      switch (value) {
+        case Residency.resident:
+          await prefs.setString(_residencyKey, 'resident');
+        case Residency.nonResident:
+          await prefs.setString(_residencyKey, 'non_resident');
+        case Residency.any || null:
+          await prefs.remove(_residencyKey);
+      }
+    } on Exception {
+      // The filter still applies for this sheet; only the memory of it is lost.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -113,7 +157,7 @@ class _SeasonsTabState extends State<SeasonsTab> {
             group: _group,
             residency: _residency,
             onGroup: (value) => setState(() => _group = value),
-            onResidency: (value) => setState(() => _residency = value),
+            onResidency: _setResidency,
           ),
           TabBar(
             isScrollable: true,
@@ -141,6 +185,7 @@ class _SeasonsTabState extends State<SeasonsTab> {
                   status: SeasonStatus.open,
                   today: widget.today,
                   pack: pack,
+                  residencyShown: _residency != null,
                   emptyText: 'Nothing is open in WMU ${widget.wmuId} today for '
                       'the current filter.',
                 ),
@@ -149,6 +194,7 @@ class _SeasonsTabState extends State<SeasonsTab> {
                   status: SeasonStatus.upcoming,
                   today: widget.today,
                   pack: pack,
+                  residencyShown: _residency != null,
                   emptyText: 'No further seasons open in WMU ${widget.wmuId} '
                       'before the ${pack.yearLabel} regulation year ends.',
                 ),
@@ -157,6 +203,7 @@ class _SeasonsTabState extends State<SeasonsTab> {
                   status: SeasonStatus.closed,
                   today: widget.today,
                   pack: pack,
+                  residencyShown: _residency != null,
                   emptyText: 'No seasons have closed yet this regulation year.',
                 ),
               ],
@@ -198,11 +245,10 @@ class _Filters extends StatelessWidget {
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+        // Residency first. It is remembered between sheets, and at the far end
+        // of a scrolling row a remembered filter would be hiding seasons from
+        // someone who cannot see that it is on.
         children: [
-          _chip('All game', group == null, () => onGroup(null)),
-          for (final id in groups)
-            _chip(pack.groupLabel(id), group == id, () => onGroup(id)),
-          const VerticalDivider(width: 20, indent: 8, endIndent: 8),
           _chip(
             'Resident',
             residency == Residency.resident,
@@ -217,6 +263,10 @@ class _Filters extends StatelessWidget {
               residency == Residency.nonResident ? null : Residency.nonResident,
             ),
           ),
+          const VerticalDivider(width: 20, indent: 8, endIndent: 8),
+          _chip('All game', group == null, () => onGroup(null)),
+          for (final id in groups)
+            _chip(pack.groupLabel(id), group == id, () => onGroup(id)),
         ],
       ),
     );
@@ -242,6 +292,7 @@ class _SeasonList extends StatelessWidget {
     required this.today,
     required this.pack,
     required this.emptyText,
+    required this.residencyShown,
   });
 
   final List<SeasonEntry> seasons;
@@ -249,6 +300,10 @@ class _SeasonList extends StatelessWidget {
   final DateTime today;
   final ProvinceSeasons pack;
   final String emptyText;
+
+  /// A residency chip is on, so every row is for that residency and saying so
+  /// on each one only repeats the chip.
+  final bool residencyShown;
 
   @override
   Widget build(BuildContext context) {
@@ -288,6 +343,7 @@ class _SeasonList extends StatelessWidget {
             seasons: bySpecies[id]!,
             status: status,
             today: today,
+            residencyShown: residencyShown,
           ),
         const SizedBox(height: 8),
         Text(
@@ -316,11 +372,13 @@ class _SpeciesCard extends StatelessWidget {
     required this.seasons,
     required this.status,
     required this.today,
+    required this.residencyShown,
   });
 
   final List<SeasonEntry> seasons;
   final SeasonStatus status;
   final DateTime today;
+  final bool residencyShown;
 
   @override
   Widget build(BuildContext context) {
@@ -356,7 +414,12 @@ class _SpeciesCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            for (final season in sorted) _SeasonRow(season: season, today: today),
+            for (final season in sorted)
+              _SeasonRow(
+                season: season,
+                today: today,
+                residencyShown: residencyShown,
+              ),
           ],
         ),
       ),
@@ -365,10 +428,15 @@ class _SpeciesCard extends StatelessWidget {
 }
 
 class _SeasonRow extends StatelessWidget {
-  const _SeasonRow({required this.season, required this.today});
+  const _SeasonRow({
+    required this.season,
+    required this.today,
+    required this.residencyShown,
+  });
 
   final SeasonEntry season;
   final DateTime today;
+  final bool residencyShown;
 
   @override
   Widget build(BuildContext context) {
@@ -377,7 +445,8 @@ class _SeasonRow extends StatelessWidget {
         .bodySmall
         ?.copyWith(color: Colors.black54, height: 1.3);
     final detail = [
-      if (season.residency != Residency.any) season.residency.label,
+      if (season.residency != Residency.any && !residencyShown)
+        season.residency.label,
       if (season.huntCode != null) 'Hunt code ${season.huntCode}',
     ].join(' · ');
 

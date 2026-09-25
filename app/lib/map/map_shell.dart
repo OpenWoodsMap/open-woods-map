@@ -196,6 +196,11 @@ class _MapShellState extends State<MapShell> {
   /// card stays up while the map moves under it.
   ({LandInfo info, SpotSummary summary})? _spot;
 
+  /// The map's own box, and the column of cards along its bottom, measured so
+  /// a new spot card can keep its pin in view.
+  final _bodyKey = GlobalKey();
+  final _bottomOverlayKey = GlobalKey();
+
   /// Fixes discarded during the current recording for being too imprecise.
   /// Reported live in the recording bar and again on save; see
   /// [_worstUsableAccuracyMetres].
@@ -758,6 +763,7 @@ class _MapShellState extends State<MapShell> {
         ),
       ),
       body: Stack(
+        key: _bodyKey,
         children: [
           if (_stylesReady)
             MapLibreMap(
@@ -936,6 +942,7 @@ class _MapShellState extends State<MapShell> {
               right: 76,
               bottom: 30,
               child: Column(
+                key: _bottomOverlayKey,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -2666,6 +2673,44 @@ class _MapShellState extends State<MapShell> {
             : spotSummary(info, data.layers),
       );
     });
+    await _keepPinClearOfCard(map, point);
+  }
+
+  /// Nudges the map up when the card has landed on top of the pin it describes.
+  ///
+  /// A tap in the bottom third put the pin under the card, so the card talked
+  /// about a spot nobody could see. Only the overlap is taken up, so a tap
+  /// anywhere else leaves the map exactly where the user put it.
+  Future<void> _keepPinClearOfCard(
+    MapLibreMapController map,
+    math.Point<double> tapped,
+  ) async {
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || _spot == null) return;
+    final body = _bodyKey.currentContext?.findRenderObject();
+    final overlay = _bottomOverlayKey.currentContext?.findRenderObject();
+    if (body is! RenderBox || overlay is! RenderBox) return;
+    if (!body.hasSize || !overlay.hasSize) return;
+    final overlayTop = overlay.localToGlobal(Offset.zero, ancestor: body).dy;
+    // The plugin's screen points are native units: physical pixels from
+    // Android's Projection, points on iOS. Flutter layout is logical.
+    final native = defaultTargetPlatform == TargetPlatform.android
+        ? MediaQuery.devicePixelRatioOf(context)
+        : 1.0;
+    // Room for the pin itself, which is drawn centred on the point.
+    const clearance = 40.0;
+    final overlap = tapped.y / native - (overlayTop - clearance);
+    if (overlap <= 0) return;
+    final centre = math.Point<double>(
+      body.size.width / 2 * native,
+      (body.size.height / 2 + overlap) * native,
+    );
+    final target = await map.toLatLng(centre);
+    if (!mounted) return;
+    await map.animateCamera(
+      CameraUpdate.newLatLng(target),
+      duration: const Duration(milliseconds: 250),
+    );
   }
 
   Future<void> _dismissSpot() async {

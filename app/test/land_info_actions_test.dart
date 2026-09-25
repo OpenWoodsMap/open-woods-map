@@ -89,14 +89,24 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('offers the three prompts and the facts on their own',
-        (tester) async {
+    testWidgets('keeps the prompts folded until asked', (tester) async {
       await pumpSheet(tester, offerSave: false);
       await tester.scrollUntilVisible(
         find.text('ASK AN AI'),
         300,
         scrollable: sheetScroller(),
       );
+      expect(find.textContaining('Nothing is sent from this app'),
+          findsOneWidget);
+      expect(find.text('Copy just the facts'), findsNothing);
+      expect(find.textContaining('An AI does not know the law'), findsNothing);
+    });
+
+    testWidgets('offers the three prompts and the facts on their own',
+        (tester) async {
+      await pumpSheet(tester, offerSave: false);
+      await tapInSheet(tester, 'Show the prompts');
+      expect(find.textContaining('An AI does not know the law'), findsOneWidget);
       for (final label in [
         'Explain these records',
         'Draft an email to the authority',
@@ -122,6 +132,7 @@ void main() {
           .setMockMethodCallHandler(SystemChannels.platform, null));
 
       await pumpSheet(tester, offerSave: false);
+      await tapInSheet(tester, 'Show the prompts');
       await tapInSheet(tester, 'Copy just the facts');
       expect(copied, hasLength(1));
       expect(copied.single, contains('45.000000, -79.000000'));
@@ -139,6 +150,7 @@ void main() {
           .setMockMethodCallHandler(SystemChannels.platform, null));
 
       await pumpSheet(tester, offerSave: false);
+      await tapInSheet(tester, 'Show the prompts');
       await tapInSheet(tester, 'Copy just the facts');
       expect(
         find.descendant(
