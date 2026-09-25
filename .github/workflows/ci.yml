@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # Pinned to the same version as release-apk.yml. A floating version would
       # let an upstream Flutter release turn main red with no commit to blame,

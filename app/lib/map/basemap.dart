@@ -28,7 +28,10 @@ extension BasemapKindX on BasemapKind {
         BasemapKind.offline => Icons.map_outlined,
         BasemapKind.streets => Icons.signpost_outlined,
         BasemapKind.satellite => Icons.satellite_alt,
-        BasemapKind.hybrid => Icons.layers_outlined,
+        // Not a layers glyph: the Layers button sits beside this one in the
+        // app bar, and two stacked-squares icons side by side read as the same
+        // button twice.
+        BasemapKind.hybrid => Icons.satellite_outlined,
       };
 
   /// Streets use the OpenFreeMap hosted style; satellite and hybrid are local

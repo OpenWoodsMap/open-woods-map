@@ -3171,7 +3171,7 @@ enum _MapMenuItem {
   wind(label: 'Wind where I am', icon: Icons.air),
   // My maps is deliberately absent: it lives at the foot of the basemap sheet,
   // which is where "what is the picture under my data" is already answered.
-  offlinePacks(label: 'Offline packs', icon: Icons.offline_bolt_outlined),
+  offlinePacks(label: 'Offline packs', icon: Icons.download_for_offline_outlined),
   settings(label: 'Settings', icon: Icons.tune);
 
   const _MapMenuItem({required this.label, required this.icon});
