@@ -91,6 +91,7 @@ class SpotCard extends StatelessWidget {
     required this.summary,
     required this.onLandInfo,
     required this.onSaveWaypoint,
+    required this.onShare,
     required this.onDismiss,
   });
 
@@ -103,6 +104,7 @@ class SpotCard extends StatelessWidget {
   /// on screen in the banner that offers the download.
   final VoidCallback? onLandInfo;
   final VoidCallback onSaveWaypoint;
+  final VoidCallback onShare;
   final VoidCallback onDismiss;
 
   String get _coordinates =>
@@ -139,6 +141,16 @@ class SpotCard extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                ),
+                // Beside the close button rather than in the row below, which
+                // holds the two things a tap is usually for and is already as
+                // wide as a small phone allows.
+                IconButton(
+                  icon: const Icon(Icons.share_outlined, size: 18),
+                  color: onContainer,
+                  tooltip: 'Share this spot',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onShare,
                 ),
                 IconButton(
                   icon: const Icon(Icons.close, size: 18),

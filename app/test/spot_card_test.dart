@@ -242,6 +242,7 @@ void main() {
       SpotSummary summary = const SpotSummary('Crown land'),
       VoidCallback? onLandInfo,
       VoidCallback? onSaveWaypoint,
+      VoidCallback? onShare,
       VoidCallback? onDismiss,
     }) => tester.pumpWidget(
       MaterialApp(
@@ -252,6 +253,7 @@ void main() {
             summary: summary,
             onLandInfo: onLandInfo,
             onSaveWaypoint: onSaveWaypoint ?? () {},
+            onShare: onShare ?? () {},
             onDismiss: onDismiss ?? () {},
           ),
         ),
@@ -285,17 +287,20 @@ void main() {
     testWidgets('each action reports separately', (tester) async {
       var info = 0;
       var saved = 0;
+      var shared = 0;
       var dismissed = 0;
       await pumpCard(
         tester,
         onLandInfo: () => info++,
         onSaveWaypoint: () => saved++,
+        onShare: () => shared++,
         onDismiss: () => dismissed++,
       );
       await tester.tap(find.text('Land info'));
       await tester.tap(find.text('Waypoint'));
+      await tester.tap(find.byTooltip('Share this spot'));
       await tester.tap(find.byTooltip('Dismiss'));
-      expect((info, saved, dismissed), (1, 1, 1));
+      expect((info, saved, shared, dismissed), (1, 1, 1, 1));
     });
 
     // Disabled rather than missing, so the row of buttons is the same shape

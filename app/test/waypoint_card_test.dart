@@ -196,6 +196,12 @@ void main() {
     });
   });
 
+  testWidgets('asks to share what was tapped', (tester) async {
+    final request = await open(tester, _track(), tap: 'Share');
+    expect(request, isA<ShareFromCard>());
+    expect((request! as ShareFromCard).waypoint.id, 't1');
+  });
+
   testWidgets('asks to hide what was tapped', (tester) async {
     final request = await open(tester, _point(), tap: 'Hide');
     expect(request, isA<HideFromCard>());

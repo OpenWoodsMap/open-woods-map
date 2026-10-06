@@ -32,6 +32,7 @@ import '../tracks/track_math.dart';
 import '../tracks/track_style.dart';
 import '../ui/messages.dart';
 import '../weather/weather.dart';
+import '../waypoints/import_export.dart';
 import '../waypoints/undo.dart';
 import '../waypoints/waypoint_card.dart';
 import '../waypoints/waypoint_icon.dart';
@@ -51,6 +52,7 @@ import 'measure.dart';
 import 'measure_bar.dart';
 import 'overlay_controller.dart';
 import 'own_hits.dart';
+import 'share_location.dart';
 import 'spot_card.dart';
 import 'walking_location.dart';
 import 'wind_chip.dart';
@@ -655,6 +657,7 @@ class _MapShellState extends State<MapShell> {
             onSelected: (item) => switch (item) {
               _MapMenuItem.measure => _startMeasuring(),
               _MapMenuItem.wind => _showWind(),
+              _MapMenuItem.shareLocation => _shareMyLocation(),
               _MapMenuItem.offlinePacks => _openOfflinePacks(),
               _MapMenuItem.settings => _openSettings(),
             },
@@ -1014,6 +1017,12 @@ class _MapShellState extends State<MapShell> {
                           ? null
                           : () => _openLandInfoSheet(spot.info),
                       onSaveWaypoint: () => _saveWaypointFromSpot(spot.info),
+                      onShare: () => _share(
+                        spotText(
+                          latitude: spot.info.latitude,
+                          longitude: spot.info.longitude,
+                        ),
+                      ),
                       onDismiss: _dismissSpot,
                     ),
                   ],
@@ -3040,6 +3049,8 @@ class _MapShellState extends State<MapShell> {
     switch (request) {
       case SwitchFromCard():
         return;
+      case ShareFromCard(waypoint: final subject):
+        await _shareFromCard(subject);
       case HideFromCard(waypoint: final subject):
         await _hideFromCard(subject);
       case EditFromCard(waypoint: final subject):
@@ -3194,6 +3205,80 @@ class _MapShellState extends State<MapShell> {
     }
   }
 
+  /// Sends where the user is standing, said with how good the fix is.
+  ///
+  /// A fresh fix first, for the same reason as [_saveWaypointHere]. Unlike
+  /// saving, though, this falls back to the last fix the phone knows of when a
+  /// fresh one does not come: someone sending their position because they are
+  /// lost under canopy may never get a better fix, and an old position that
+  /// says how old it is beats sending nothing. It never falls back to the
+  /// camera centre, which would be a claim about a place nobody stood.
+  Future<void> _shareMyLocation() async {
+    if (!await _ensureLocationPermission('share where you are')) return;
+    Position? position;
+    try {
+      position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 20),
+        ),
+      );
+    } catch (_) {
+      try {
+        position = await Geolocator.getLastKnownPosition();
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    if (position == null) {
+      _toast(
+        'No GPS fix yet, so nothing was shared. Open sky helps; try again in '
+        'a minute.',
+      );
+      return;
+    }
+    await _share(
+      myLocationText(
+        latitude: position.latitude,
+        longitude: position.longitude,
+        accuracyMetres: position.accuracy,
+        taken: position.timestamp,
+        now: DateTime.now(),
+      ),
+    );
+  }
+
+  /// A waypoint goes as text, which any phone can read; a track as a GPX file,
+  /// because a line has no text form worth sending and GPX is what Garmin
+  /// Connect, CalTopo and onX all import.
+  Future<void> _shareFromCard(Waypoint waypoint) async {
+    if (!waypoint.isTrack) {
+      await _share(
+        waypointText(
+          name: waypoint.name,
+          latitude: waypoint.latitude,
+          longitude: waypoint.longitude,
+        ),
+      );
+      return;
+    }
+    try {
+      await WaypointImportExport().share([waypoint], WaypointFormat.gpx);
+    } catch (error) {
+      _toast('Could not share the track: $error');
+    }
+  }
+
+  /// The share sheet only hands the text on. Whether a text message then
+  /// reaches anyone is the messaging app's business, so nothing here claims
+  /// it was sent.
+  Future<void> _share(String text) async {
+    try {
+      await shareText(text);
+    } catch (error) {
+      _toast('Could not open sharing: $error');
+    }
+  }
+
   /// Puts a saved waypoint or track on screen after the list hands one back.
   ///
   /// A track gets its whole extent framed rather than its first point centred.
@@ -3306,10 +3391,11 @@ class _CustomLayer {
 
 /// The screens reached from the map's overflow menu rather than from a button.
 enum _MapMenuItem {
-  // Two map tools, then the two screens you leave the map for, with a divider
+  // Three map tools, then the two screens you leave the map for, with a divider
   // between them in the menu.
   measure(label: 'Measure a distance', icon: Icons.straighten),
   wind(label: 'Wind where I am', icon: Icons.air),
+  shareLocation(label: 'Share my location', icon: Icons.share_location),
   // My maps is deliberately absent: it lives at the foot of the basemap sheet,
   // which is where "what is the picture under my data" is already answered.
   offlinePacks(label: 'Offline packs', icon: Icons.download_for_offline_outlined),

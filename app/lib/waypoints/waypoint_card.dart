@@ -45,6 +45,13 @@ final class HideFromCard extends WaypointCardRequest {
   final Waypoint waypoint;
 }
 
+/// Send it to someone: a waypoint as text, a track as a GPX file.
+final class ShareFromCard extends WaypointCardRequest {
+  const ShareFromCard(this.waypoint);
+
+  final Waypoint waypoint;
+}
+
 /// Open the card for something else the same tap touched.
 final class SwitchFromCard extends WaypointCardRequest {
   const SwitchFromCard(this.waypoint);
@@ -167,6 +174,12 @@ class _WaypointCard extends StatelessWidget {
                     Navigator.pop(context, const LandInfoFromCard()),
                 icon: const Icon(Icons.travel_explore),
                 label: const Text('Land info'),
+              ),
+              TextButton.icon(
+                onPressed: () =>
+                    Navigator.pop(context, ShareFromCard(waypoint)),
+                icon: const Icon(Icons.share_outlined),
+                label: const Text('Share'),
               ),
               // "Hide", not "Hide from map": the card is on the map, and the
               // message the map raises says where it went.
