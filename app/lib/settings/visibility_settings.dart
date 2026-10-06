@@ -56,6 +56,20 @@ class VisibilitySettings extends ChangeNotifier {
     await _persist();
   }
 
+  /// [setItemHidden] for many at once, with one notification and one write.
+  Future<void> setItemsHidden(
+    Iterable<String> ids, {
+    required bool hidden,
+  }) async {
+    var changed = false;
+    for (final id in ids) {
+      changed |= hidden ? _hiddenItemIds.add(id) : _hiddenItemIds.remove(id);
+    }
+    if (!changed) return;
+    notifyListeners();
+    await _persist();
+  }
+
   Future<void> setTagHidden(String tag, {required bool hidden}) async {
     final changed = hidden ? _hiddenTags.add(tag) : _hiddenTags.remove(tag);
     if (!changed) return;

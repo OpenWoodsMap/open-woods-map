@@ -79,6 +79,10 @@ class _WaypointsPageState extends State<WaypointsPage> {
   /// in force rather than being a setting to remember.
   var _matchAll = false;
 
+  /// Whether the list is narrowed to what is kept off the map, by its own eye
+  /// or by a tag's. One question, because both look the same from the map.
+  var _onlyHidden = false;
+
   /// What is being searched for, trimmed and lowered once here rather than on
   /// every comparison. Empty means no search.
   var _query = '';
@@ -129,9 +133,16 @@ class _WaypointsPageState extends State<WaypointsPage> {
   /// Not the same question as whether tags are picked, which is what decides
   /// how the list is sectioned. A search alone hides rows without changing what
   /// the sections are.
-  bool get _filtered => _selected.isNotEmpty || _query.isNotEmpty;
+  bool get _filtered =>
+      _selected.isNotEmpty || _query.isNotEmpty || _onlyHidden;
 
-  bool _matches(Waypoint item) => _matchesQuery(item) && _matchesTags(item);
+  bool _matches(Waypoint item) =>
+      _matchesQuery(item) &&
+      _matchesTags(item) &&
+      (!_onlyHidden || _hiddenOnMap(item));
+
+  bool _hiddenOnMap(Waypoint item) =>
+      widget.visibility.isHiddenOnMap(item.id, item.tags);
 
   bool _matchesTags(Waypoint item) {
     if (_selected.isEmpty) return true;
@@ -156,6 +167,7 @@ class _WaypointsPageState extends State<WaypointsPage> {
 
   void _clearFilters() => setState(() {
     _selected.clear();
+    _onlyHidden = false;
     _query = '';
     _search.clear();
   });
@@ -292,6 +304,27 @@ class _WaypointsPageState extends State<WaypointsPage> {
                 ),
               ),
               const PopupMenuDivider(),
+              // Scoped to what is shown, like export and delete beside them, so
+              // "hide everything from 2023" is a tag chip and then this.
+              PopupMenuItem(
+                enabled: visible.any((item) => !_hiddenOnMap(item)),
+                onTap: _hideShown,
+                child: Text(
+                  _filtered
+                      ? 'Hide the ${visible.length} shown from the map'
+                      : 'Hide all ${visible.length} from the map',
+                ),
+              ),
+              PopupMenuItem(
+                enabled: visible.any(_hiddenOnMap),
+                onTap: _showShown,
+                child: Text(
+                  _filtered
+                      ? 'Show the ${visible.length} shown on the map'
+                      : 'Show all ${visible.length} on the map',
+                ),
+              ),
+              const PopupMenuDivider(),
               PopupMenuItem(
                 enabled: visible.isNotEmpty,
                 onTap: _deleteShown,
@@ -363,12 +396,17 @@ class _WaypointsPageState extends State<WaypointsPage> {
           children: [
             Text(
               switch ((_query.isNotEmpty, _selected.isNotEmpty)) {
+                (false, false) => 'Nothing is hidden from the map.',
                 (true, true) =>
                   'Nothing matching "$typed" carries '
-                      '${_matchAll ? 'all of' : 'any of'} $tags.',
-                (true, false) => 'Nothing matches "$typed".',
+                      '${_matchAll ? 'all of' : 'any of'} $tags'
+                      '${_onlyHidden ? ' and is hidden from the map' : ''}.',
+                (true, false) => _onlyHidden
+                    ? 'Nothing hidden from the map matches "$typed".'
+                    : 'Nothing matches "$typed".',
                 _ =>
-                  'Nothing carries ${_matchAll ? 'all of' : 'any of'} $tags.',
+                  'Nothing ${_onlyHidden ? 'hidden from the map ' : ''}'
+                      'carries ${_matchAll ? 'all of' : 'any of'} $tags.',
               },
               textAlign: TextAlign.center,
             ),
@@ -422,6 +460,7 @@ class _WaypointsPageState extends State<WaypointsPage> {
   /// enough tags, typing part of one is faster than reading a wall of them.
   Widget _filterBar() {
     final counts = widget.store.tagCounts;
+    final hiddenCount = widget.store.items.where(_hiddenOnMap).length;
     final all = counts.keys.toList()..sort();
     // A search narrows the chips as well as the list, because "find the tag I
     // want to filter on" is most of what the old row made hard. A tag already
@@ -487,6 +526,16 @@ class _WaypointsPageState extends State<WaypointsPage> {
                 // it lie.
                 onSelected: (_) => _clearFilters(),
               ),
+              // Counts every hidden item, not only those the other filters let
+              // through: it is the answer to "what is missing from my map", and
+              // a number that shrank with the search would not be.
+              if (hiddenCount > 0 || _onlyHidden)
+                FilterChip(
+                  avatar: const Icon(Icons.visibility_off_outlined, size: 16),
+                  label: Text('Hidden from map $hiddenCount'),
+                  selected: _onlyHidden,
+                  onSelected: (on) => setState(() => _onlyHidden = on),
+                ),
               // Shown whether or not it currently changes anything, because a
               // filter whose rule is invisible until it bites is worse than a
               // chip that sometimes says something obvious.
@@ -1025,6 +1074,69 @@ class _WaypointsPageState extends State<WaypointsPage> {
         'Only items carrying no tags at all. Anything with even one tag stays, '
         'whichever section it is showing in.',
   );
+
+  /// Takes everything shown off the map, with an undo and no confirmation:
+  /// nothing is lost, and the Hidden from map chip is the way back.
+  Future<void> _hideShown() async {
+    final items = _visible
+        .where((item) => !widget.visibility.isItemHidden(item.id))
+        .toList();
+    if (items.isEmpty) return;
+    final ids = items.map((item) => item.id).toList();
+    await widget.visibility.setItemsHidden(ids, hidden: true);
+    if (!mounted) return;
+    showMessage(
+      context,
+      'Hid ${describeItems(items)} from the map. Still saved.',
+      actionLabel: 'UNDO',
+      onAction: () => widget.visibility.setItemsHidden(ids, hidden: false),
+    );
+  }
+
+  /// Draws everything shown again, as far as the items' own eyes can.
+  ///
+  /// A hidden tag is left hidden. It is a choice about every item carrying the
+  /// tag, including ones this filter is not showing, so undoing it from here
+  /// would reach past what the menu item names. The message says which tags
+  /// are still holding items back, so nothing stays off the map unexplained.
+  Future<void> _showShown() async {
+    final shown = _visible;
+    final items =
+        shown.where((item) => widget.visibility.isItemHidden(item.id)).toList();
+    final ids = items.map((item) => item.id).toList();
+    await widget.visibility.setItemsHidden(ids, hidden: false);
+    if (!mounted) return;
+    final held = shown.where(_hiddenOnMap).toList();
+    final tags = <String>{
+      for (final item in held) ...widget.visibility.hidingTagsFor(item.tags),
+    }.toList()
+      ..sort();
+    final named = tags.map((tag) => '#$tag').join(', ');
+    final heldNote = held.isEmpty
+        ? ''
+        : '${describeItems(held)} stay hidden because $named '
+              '${tags.length == 1 ? 'is' : 'are'} hidden.';
+    if (items.isEmpty) {
+      showMessage(
+        context,
+        heldNote,
+        actionLabel: tags.length == 1 ? 'UNHIDE TAG' : 'UNHIDE TAGS',
+        onAction: () async {
+          for (final tag in tags) {
+            await widget.visibility.setTagHidden(tag, hidden: false);
+          }
+        },
+      );
+      return;
+    }
+    showMessage(
+      context,
+      'Showing ${describeItems(items)} on the map again.'
+      '${heldNote.isEmpty ? '' : ' $heldNote'}',
+      actionLabel: 'UNDO',
+      onAction: () => widget.visibility.setItemsHidden(ids, hidden: true),
+    );
+  }
 
   /// Deletes everything the list is currently showing.
   ///

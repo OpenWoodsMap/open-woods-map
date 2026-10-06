@@ -46,6 +46,7 @@ void main() {
     WidgetTester tester,
     Waypoint waypoint, {
     String? tap,
+    List<Waypoint> alsoHere = const [],
   }) async {
     WaypointCardRequest? result;
     late BuildContext ctx;
@@ -61,7 +62,8 @@ void main() {
         ),
       ),
     );
-    showWaypointCard(ctx, waypoint).then((value) => result = value);
+    showWaypointCard(ctx, waypoint, alsoHere: alsoHere)
+        .then((value) => result = value);
     await tester.pumpAndSettle();
     if (tap != null) {
       await tester.tap(find.text(tap));
@@ -191,6 +193,33 @@ void main() {
         await open(tester, _track(), tap: 'Land info'),
         isA<LandInfoFromCard>(),
       );
+    });
+  });
+
+  testWidgets('asks to hide what was tapped', (tester) async {
+    final request = await open(tester, _point(), tap: 'Hide');
+    expect(request, isA<HideFromCard>());
+    expect((request! as HideFromCard).waypoint.id, 'w1');
+  });
+
+  group('a tap that touched more than one thing', () {
+    testWidgets('says nothing else is here when nothing is', (tester) async {
+      await open(tester, _point());
+      expect(find.text('Also here'), findsNothing);
+    });
+
+    testWidgets('lists the others, saying which are tracks', (tester) async {
+      await open(tester, _point(), alsoHere: [_track()]);
+      expect(find.text('Also here'), findsOneWidget);
+      expect(find.text('Ridge loop'), findsOneWidget);
+      expect(find.text('Track'), findsOneWidget);
+    });
+
+    testWidgets('asks to switch to the one picked', (tester) async {
+      final request =
+          await open(tester, _point(), alsoHere: [_track()], tap: 'Ridge loop');
+      expect(request, isA<SwitchFromCard>());
+      expect((request! as SwitchFromCard).waypoint.id, 't1');
     });
   });
 

@@ -50,6 +50,7 @@ import 'layer_panel.dart';
 import 'measure.dart';
 import 'measure_bar.dart';
 import 'overlay_controller.dart';
+import 'own_hits.dart';
 import 'spot_card.dart';
 import 'walking_location.dart';
 import 'wind_chip.dart';
@@ -2659,8 +2660,8 @@ class _MapShellState extends State<MapShell> {
       // The user's own data wins, and is checked before the province guard
       // below: a waypoint is theirs whether or not a pack is installed, and it
       // is the thing they aimed at.
-      final mine = await _ownFeatureAt(map, point);
-      if (mine != null) {
+      final mine = await _ownFeaturesAt(map, point, coordinates);
+      if (mine.isNotEmpty) {
         await _openWaypointCard(mine, coordinates);
         return;
       }
@@ -2817,44 +2818,67 @@ class _MapShellState extends State<MapShell> {
     );
   }
 
-  /// The user's own waypoint or track under [point], or null for bare ground.
+  /// The user's own waypoints and tracks near [point], best first, or empty
+  /// for bare ground. [rankOwnHits] decides the order.
   ///
-  /// Points are asked about before lines, so a waypoint standing on a track is
-  /// the answer rather than the track under it: it is the smaller target, so
-  /// hitting it is the more deliberate act.
-  Future<Waypoint?> _ownFeatureAt(
+  /// A box rather than the point itself, [ownHitSlop] either side: see there
+  /// for why it is that size.
+  Future<List<Waypoint>> _ownFeaturesAt(
     MapLibreMapController map,
     math.Point<double> point,
+    LatLng coordinates,
   ) async {
-    for (final layerId in [
+    // Screen points are physical pixels on Android and points on iOS; see
+    // _keepPinClearOfCard.
+    final slop = ownHitSlop *
+        (defaultTargetPlatform == TargetPlatform.android
+            ? MediaQuery.devicePixelRatioOf(context)
+            : 1.0);
+    final box = Rect.fromCenter(
+      center: Offset(point.x, point.y),
+      width: slop * 2,
+      height: slop * 2,
+    );
+    Future<List<String>> idsIn(List<String> layerIds) async {
+      final ids = <String>[];
+      for (final layerId in layerIds) {
+        final List<dynamic> found;
+        try {
+          found = await map.queryRenderedFeaturesInRect(box, [layerId], null);
+        } catch (_) {
+          // The layer may not exist: the marker layers are only added when
+          // something wants them, and a tap can race a style reload.
+          continue;
+        }
+        for (final feature in found) {
+          if (feature is! Map) continue;
+          final id = (feature['properties'] as Map?)?['id']?.toString();
+          if (id != null) ids.add(id);
+        }
+      }
+      return ids;
+    }
+
+    final points = await idsIn([
       'owm-waypoint-symbols',
       // The pin is by far the biggest target on the map, so it has to be
       // tappable and not just decoration under the glyph.
       _waypointPinLayer,
       'owm-waypoint-dots',
+    ]);
+    final lines = await idsIn([
       'owm-follow-markers',
       'owm-follow-line',
       _savedMarkerLayer,
       for (final stroke in TrackStroke.values) _savedLineLayer(stroke),
-    ]) {
-      final List<dynamic> found;
-      try {
-        found = await map.queryRenderedFeatures(point, [layerId], null);
-      } catch (_) {
-        // The layer may not exist: the marker layers are only added when
-        // something wants them, and a tap can race a style reload.
-        continue;
-      }
-      for (final feature in found) {
-        if (feature is! Map<String, dynamic>) continue;
-        final id = (feature['properties'] as Map?)?['id']?.toString();
-        if (id == null) continue;
-        for (final waypoint in _waypoints.items) {
-          if (waypoint.id == id) return waypoint;
-        }
-      }
-    }
-    return null;
+    ]);
+    return rankOwnHits(
+      pointIds: points,
+      lineIds: lines,
+      items: _waypoints.items,
+      latitude: coordinates.latitude,
+      longitude: coordinates.longitude,
+    );
   }
 
   /// Resolves what sits under [point] by asking MapLibre, which already holds
@@ -2992,13 +3016,32 @@ class _MapShellState extends State<MapShell> {
   }
 
   /// The card for one of the user's own features, and whatever it asks for next.
+  /// The card for the first of [hits], with the rest a tap away beneath it.
   Future<void> _openWaypointCard(
-    Waypoint waypoint,
+    List<Waypoint> hits,
     LatLng coordinates,
   ) async {
-    final request = await showWaypointCard(context, waypoint);
-    if (!mounted || request == null) return;
+    var waypoint = hits.first;
+    WaypointCardRequest? request;
+    while (true) {
+      request = await showWaypointCard(
+        context,
+        waypoint,
+        alsoHere: [
+          for (final other in hits)
+            if (other.id != waypoint.id) other,
+        ],
+      );
+      if (!mounted) return;
+      if (request is! SwitchFromCard) break;
+      waypoint = request.waypoint;
+    }
+    if (request == null) return;
     switch (request) {
+      case SwitchFromCard():
+        return;
+      case HideFromCard(waypoint: final subject):
+        await _hideFromCard(subject);
       case EditFromCard(waypoint: final subject):
         final edited = await showWaypointEditor(
           context,
@@ -3030,6 +3073,22 @@ class _MapShellState extends State<MapShell> {
           coordinates,
         );
     }
+  }
+
+  /// Takes what the user just tapped off the map, saying where it went.
+  ///
+  /// The message names the list because that is the only way back once the
+  /// undo has gone: a hidden item is not drawn, so it cannot be tapped again.
+  Future<void> _hideFromCard(Waypoint waypoint) async {
+    await _visibility.setItemHidden(waypoint.id, hidden: true);
+    if (!mounted) return;
+    showMessage(
+      context,
+      'Hid ${waypoint.name}. It is still saved: show it again from '
+      'Waypoints & tracks.',
+      actionLabel: 'UNDO',
+      onAction: () => _visibility.setItemHidden(waypoint.id, hidden: false),
+    );
   }
 
   /// Deletes what the user just tapped, offering the same undo the list does.

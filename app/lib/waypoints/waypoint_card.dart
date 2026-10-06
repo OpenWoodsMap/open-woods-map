@@ -38,24 +38,51 @@ final class LandInfoFromCard extends WaypointCardRequest {
   const LandInfoFromCard();
 }
 
+/// Take it off the map. It stays saved, and the list is where it comes back.
+final class HideFromCard extends WaypointCardRequest {
+  const HideFromCard(this.waypoint);
+
+  final Waypoint waypoint;
+}
+
+/// Open the card for something else the same tap touched.
+final class SwitchFromCard extends WaypointCardRequest {
+  const SwitchFromCard(this.waypoint);
+
+  final Waypoint waypoint;
+}
+
 /// What one of the user's own waypoints or tracks says when tapped on the map.
 ///
 /// A tap used to do nothing at all on a waypoint, and on a track it opened Land
 /// Info as though the user had tapped bare ground. Everything they might want to
 /// do to a track was five taps away in the list.
+///
+/// [alsoHere] is whatever else the tap touched. The card opens on the likeliest
+/// target rather than asking first, because a tap on one waypoint is far more
+/// common than a tap on a stack, and a question every time would tax the common
+/// case to serve the rare one. What it did not pick stays one tap away.
 Future<WaypointCardRequest?> showWaypointCard(
   BuildContext context,
-  Waypoint waypoint,
-) => showModalBottomSheet<WaypointCardRequest>(
+  Waypoint waypoint, {
+  List<Waypoint> alsoHere = const [],
+}) => showModalBottomSheet<WaypointCardRequest>(
   context: context,
   showDragHandle: true,
-  builder: (context) => SafeArea(child: _WaypointCard(waypoint: waypoint)),
+  // A stack of imported pins can be longer than half a screen.
+  isScrollControlled: alsoHere.length > 3,
+  builder: (context) => SafeArea(
+    child: SingleChildScrollView(
+      child: _WaypointCard(waypoint: waypoint, alsoHere: alsoHere),
+    ),
+  ),
 );
 
 class _WaypointCard extends StatelessWidget {
-  const _WaypointCard({required this.waypoint});
+  const _WaypointCard({required this.waypoint, required this.alsoHere});
 
   final Waypoint waypoint;
+  final List<Waypoint> alsoHere;
 
   bool get _isTrack => waypoint.isTrack;
 
@@ -141,6 +168,14 @@ class _WaypointCard extends StatelessWidget {
                 icon: const Icon(Icons.travel_explore),
                 label: const Text('Land info'),
               ),
+              // "Hide", not "Hide from map": the card is on the map, and the
+              // message the map raises says where it went.
+              TextButton.icon(
+                onPressed: () =>
+                    Navigator.pop(context, HideFromCard(waypoint)),
+                icon: const Icon(Icons.visibility_off_outlined),
+                label: const Text('Hide'),
+              ),
               // Deleting used to be kept off this card, on the reasoning that undo
               // lived in the list and a map tap was too short a distance for
               // something irreversible. Half of that was wrong: the person tapping
@@ -163,6 +198,31 @@ class _WaypointCard extends StatelessWidget {
             ],
           ),
         ),
+        if (alsoHere.isNotEmpty) ...[
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Text(
+              'Also here',
+              style: theme.textTheme.titleSmall,
+            ),
+          ),
+          for (final other in alsoHere)
+            ListTile(
+              dense: true,
+              // The same glyph the list gives it, so a track reads as a line
+              // and not as a pin that is nowhere on the map.
+              leading: Icon(
+                other.isTrack ? Icons.polyline : other.icon.icon,
+                color: other.displayColour,
+              ),
+              title: Text(other.name),
+              subtitle: Text(other.isTrack ? 'Track' : 'Waypoint'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.pop(context, SwitchFromCard(other)),
+            ),
+          const SizedBox(height: 8),
+        ],
       ],
     );
   }

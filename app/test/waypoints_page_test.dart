@@ -1210,5 +1210,101 @@ void main() {
       expect(find.text('Untagged · 1'), findsOneWidget);
       expect(find.byTooltip('Hide "Untagged" from map'), findsNothing);
     });
+
+    testWidgets('no hidden filter is offered while nothing is hidden',
+        (tester) async {
+      final store = await stocked(tester);
+      await pumpPage(tester, store);
+
+      expect(find.textContaining('Hidden from map'), findsNothing);
+    });
+
+    // Both kinds of hidden count, because from the map they look the same:
+    // the item is simply not there.
+    testWidgets('the hidden filter shows what the map is not drawing',
+        (tester) async {
+      final vis = VisibilitySettings();
+      await vis.setItemHidden('4', hidden: true);
+      await vis.setTagHidden('creek', hidden: true);
+      final store = await stocked(tester);
+      await pumpPage(tester, store, visibility: vis);
+
+      await tester.tap(find.text('Hidden from map 2'));
+      await settle(tester);
+
+      expect(find.text('Truck'), findsOneWidget);
+      expect(find.text('Spring'), findsOneWidget);
+      expect(find.text('North stand'), findsNothing);
+      expect(find.text('South stand'), findsNothing);
+
+      await tester.tap(find.text('All 4'));
+      await settle(tester);
+      expect(find.text('South stand'), findsOneWidget);
+    });
+
+    Future<void> pickFromWholeList(WidgetTester tester, String label) async {
+      await tester.tap(find.byTooltip('Actions for the whole list'));
+      await settle(tester);
+      await tester.tap(find.text(label));
+      await settle(tester);
+    }
+
+    testWidgets('hiding what is shown leaves the rest on the map',
+        (tester) async {
+      final vis = VisibilitySettings();
+      final store = await stocked(tester);
+      await pumpPage(tester, store, visibility: vis);
+
+      await tester.tap(find.text('ridge 2'));
+      await settle(tester);
+      await pickFromWholeList(tester, 'Hide the 2 shown from the map');
+
+      expect(vis.hiddenItemIds, {'1', '2'});
+      expect(find.textContaining('Still saved'), findsOneWidget);
+    });
+
+    testWidgets('hiding everything can be undone', (tester) async {
+      final vis = VisibilitySettings();
+      await vis.setItemHidden('3', hidden: true);
+      final store = await stocked(tester);
+      await pumpPage(tester, store, visibility: vis);
+
+      await pickFromWholeList(tester, 'Hide all 4 from the map');
+      expect(vis.hiddenItemIds, {'1', '2', '3', '4'});
+
+      await tester.tap(find.text('UNDO'));
+      await settle(tester);
+      // Spring was hidden before, and the undo is of this action only.
+      expect(vis.hiddenItemIds, {'3'});
+    });
+
+    testWidgets('showing everything leaves a hidden tag alone and says so',
+        (tester) async {
+      final vis = VisibilitySettings();
+      await vis.setItemHidden('4', hidden: true);
+      await vis.setTagHidden('creek', hidden: true);
+      final store = await stocked(tester);
+      await pumpPage(tester, store, visibility: vis);
+
+      await pickFromWholeList(tester, 'Show all 4 on the map');
+
+      expect(vis.hiddenItemIds, isEmpty);
+      expect(vis.isTagHidden('creek'), isTrue);
+      expect(find.textContaining('because #creek is hidden'), findsOneWidget);
+    });
+
+    testWidgets('when only a tag holds them back, it offers that tag',
+        (tester) async {
+      final vis = VisibilitySettings();
+      await vis.setTagHidden('creek', hidden: true);
+      final store = await stocked(tester);
+      await pumpPage(tester, store, visibility: vis);
+
+      await pickFromWholeList(tester, 'Show all 4 on the map');
+      await tester.tap(find.text('UNHIDE TAG'));
+      await settle(tester);
+
+      expect(vis.isTagHidden('creek'), isFalse);
+    });
   });
 }
