@@ -752,7 +752,7 @@ void main() {
       await tester.tap(find.text('Remove "ridge" from these 2, keep them'));
       await settle(tester);
       await tester.tap(find.widgetWithText(FilledButton, 'Remove the tag'));
-      await settle(tester);
+      await settle(tester, until: find.textContaining('Nothing was deleted'));
 
       expect(store.items, hasLength(3));
       expect(store.items[0].tags, ['opening day']);
