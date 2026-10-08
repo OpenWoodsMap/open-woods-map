@@ -100,15 +100,23 @@ class DisplaySettings extends ChangeNotifier {
     WaypointMarkerStyle? markerStyle,
     WaypointMarkerSize? markerSize,
     bool lockNorth = lockNorthFallback,
+    bool showNames = showNamesFallback,
   })  : _markerStyle = markerStyle ?? WaypointMarkerStyle.fallback,
         _markerSize = markerSize ?? WaypointMarkerSize.fallback,
-        _lockNorth = lockNorth;
+        _lockNorth = lockNorth,
+        _showNames = showNames;
 
   /// Rotation stays on unless asked otherwise, because turning the map to match
   /// what is in front of you is how most people read one, and a build that
   /// silently took the gesture away would be a regression for everybody who
   /// never opens Settings.
   static const bool lockNorthFallback = false;
+
+  /// Off, because names are text laid over a map that already carries the
+  /// basemap's own labels and the tenure fills. They earn their place when many
+  /// marks share one icon, as an import tends to, and that is a moment to turn
+  /// them on rather than a reason to draw them for everybody.
+  static const bool showNamesFallback = false;
 
   /// Only a non-default choice is written, and the key is removed when the user
   /// goes back to the default. Same reason the overlay controller stores only
@@ -119,16 +127,21 @@ class DisplaySettings extends ChangeNotifier {
   static const _markerStyleKey = 'waypoint.marker_style';
   static const _markerSizeKey = 'waypoint.marker_size';
   static const _lockNorthKey = 'map.lock_north';
+  static const _showNamesKey = 'waypoint.show_names';
 
   WaypointMarkerStyle _markerStyle;
   WaypointMarkerSize _markerSize;
   bool _lockNorth;
+  bool _showNames;
 
   WaypointMarkerStyle get markerStyle => _markerStyle;
   WaypointMarkerSize get markerSize => _markerSize;
 
   /// Whether the map is pinned with north at the top and rotation disallowed.
   bool get lockNorth => _lockNorth;
+
+  /// Whether waypoint and track names are written on the map.
+  bool get showNames => _showNames;
 
   /// Must be awaited before the map draws its waypoint layers, because they are
   /// built from these values and loading afterwards would draw the markers once
@@ -141,6 +154,7 @@ class DisplaySettings extends ChangeNotifier {
     _markerStyle = WaypointMarkerStyle.fromId(prefs.getString(_markerStyleKey));
     _markerSize = WaypointMarkerSize.fromId(prefs.getString(_markerSizeKey));
     _lockNorth = prefs.getBool(_lockNorthKey) ?? lockNorthFallback;
+    _showNames = prefs.getBool(_showNamesKey) ?? showNamesFallback;
     notifyListeners();
   }
 
@@ -162,11 +176,22 @@ class DisplaySettings extends ChangeNotifier {
     if (value == _lockNorth) return;
     _lockNorth = value;
     notifyListeners();
+    await _storeBool(_lockNorthKey, value, lockNorthFallback);
+  }
+
+  Future<void> setShowNames(bool value) async {
+    if (value == _showNames) return;
+    _showNames = value;
+    notifyListeners();
+    await _storeBool(_showNamesKey, value, showNamesFallback);
+  }
+
+  Future<void> _storeBool(String key, bool value, bool fallback) async {
     final prefs = await SharedPreferences.getInstance();
-    if (value == lockNorthFallback) {
-      await prefs.remove(_lockNorthKey);
+    if (value == fallback) {
+      await prefs.remove(key);
     } else {
-      await prefs.setBool(_lockNorthKey, value);
+      await prefs.setBool(key, value);
     }
   }
 

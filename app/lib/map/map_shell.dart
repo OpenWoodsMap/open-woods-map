@@ -1786,6 +1786,7 @@ class _MapShellState extends State<MapShell> {
     for (final layer in const [
       'owm-waypoint-symbols',
       _waypointPinLayer,
+      _waypointNameLayer,
       'owm-waypoint-dots',
     ]) {
       try {
@@ -1818,6 +1819,13 @@ class _MapShellState extends State<MapShell> {
         circleStrokeColor: '#FFFFFF',
       ),
     );
+    if (_display.showNames) {
+      try {
+        await _addWaypointNameLayer(map);
+      } catch (error) {
+        _toast('Waypoint names could not be drawn: $error');
+      }
+    }
     try {
       // Under the glyph, and only when asked for. Two layers over one source
       // rather than one image, because an SDF image is tinted once for the
@@ -1837,6 +1845,50 @@ class _MapShellState extends State<MapShell> {
   }
 
   static const _waypointPinLayer = 'owm-waypoint-pins';
+  static const _waypointNameLayer = 'owm-waypoint-names';
+  static const _savedNameLayer = 'owm-saved-track-names';
+
+  /// The basemap's own label font, and that is load-bearing offline. Text
+  /// needs glyphs fetched from the style's glyph URL, and an offline area of
+  /// Streets or Hybrid saves exactly the fonts their labels use, so a name in
+  /// any other font would draw on the trip in and vanish at the trailhead.
+  static const _nameFont = ['Noto Sans Regular'];
+
+  /// Below this the names are a smear over the whole region, and the reason to
+  /// turn them on is telling apart marks close enough to share a screen.
+  static const _nameMinZoom = 11.0;
+
+  double get _nameTextSize => 12 * _display.markerSize.multiplier;
+
+  /// Under the mark, with the space between scaled to the marker it clears: a
+  /// pin rises above its point, so the name only has to clear the dot, but a
+  /// centred glyph reaches as far below the spot as above it.
+  Future<void> _addWaypointNameLayer(MapLibreMapController map) {
+    final size = _display.markerSize;
+    final clearance = _display.markerStyle == WaypointMarkerStyle.pin
+        ? dotRadiusDp(size) + 2
+        : glyphCanvasDp(size) * 0.4;
+    return map.addSymbolLayer(
+      'owm-waypoints',
+      _waypointNameLayer,
+      SymbolLayerProperties(
+        textField: const ['get', 'name'],
+        textFont: _nameFont,
+        textSize: _nameTextSize,
+        textAnchor: 'top',
+        textOffset: [0, clearance / _nameTextSize],
+        textMaxWidth: 9,
+        textColor: '#1B1B1B',
+        textHaloColor: '#FFFFFF',
+        textHaloWidth: 1.5,
+        // Collision stays on, unlike the icons. A name that would land on
+        // another is dropped until zooming in parts them, and the mark it
+        // belongs to is still drawn and still tappable, so nothing is lost
+        // that a pinch does not bring back.
+      ),
+      minzoom: _nameMinZoom,
+    );
+  }
 
   /// The pin the glyph sits inside, tinted with the waypoint's own colour.
   ///
@@ -1980,6 +2032,7 @@ class _MapShellState extends State<MapShell> {
     // replaced.
     for (final layer in [
       _savedMarkerLayer,
+      _savedNameLayer,
       for (final stroke in TrackStroke.values) _savedLineLayer(stroke),
     ]) {
       try {
@@ -2012,6 +2065,30 @@ class _MapShellState extends State<MapShell> {
         ),
         filter: ['==', ['get', 'stroke'], stroke.id],
       );
+    }
+    if (_display.showNames) {
+      try {
+        await map.addSymbolLayer(
+          'owm-saved-tracks',
+          _savedNameLayer,
+          SymbolLayerProperties(
+            textField: const ['get', 'name'],
+            textFont: _nameFont,
+            textSize: _nameTextSize,
+            symbolPlacement: 'line',
+            symbolSpacing: 400,
+            // Beside the line rather than on it, so the direction markers
+            // the name would otherwise cover stay readable.
+            textOffset: const [0, -0.9],
+            textColor: '#1B1B1B',
+            textHaloColor: '#FFFFFF',
+            textHaloWidth: 1.5,
+          ),
+          minzoom: _nameMinZoom,
+        );
+      } catch (error) {
+        _toast('Track names could not be drawn: $error');
+      }
     }
     try {
       await _addTrackMarkerLayer(map);
@@ -2874,11 +2951,15 @@ class _MapShellState extends State<MapShell> {
       // tappable and not just decoration under the glyph.
       _waypointPinLayer,
       'owm-waypoint-dots',
+      // A name is the one part of the mark that says which it is, so tapping
+      // it has to open that one.
+      _waypointNameLayer,
     ]);
     final lines = await idsIn([
       'owm-follow-markers',
       'owm-follow-line',
       _savedMarkerLayer,
+      _savedNameLayer,
       for (final stroke in TrackStroke.values) _savedLineLayer(stroke),
     ]);
     return rankOwnHits(
@@ -2984,7 +3065,7 @@ class _MapShellState extends State<MapShell> {
       // Without this the sheet is capped near half the screen, which is shorter
       // than the layer list. The panel constrains its own height.
       isScrollControlled: true,
-      builder: (_) => LayerPanel(controller: _overlays),
+      builder: (_) => LayerPanel(controller: _overlays, display: _display),
     );
   }
 

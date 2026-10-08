@@ -942,6 +942,13 @@ shows, and recolours the text to white on a dark halo so it survives over aerial
 photography. Regenerate it when OpenFreeMap updates the style; the script fails
 rather than silently dropping a layer that has been renamed.
 
+The names the map can write beside waypoints and tracks are drawn from the same
+OpenFreeMap glyph URL, in Noto Sans Regular (SIL Open Font License), so the
+satellite and offline styles name that URL too even though they have no labels of
+their own. That font is what an offline Streets or Hybrid area saves, which is why
+the names stay drawable without signal; `basemap_sources_test.dart` fails if the
+URLs drift apart or the Hybrid labels stop using that font.
+
 OpenFreeMap versions its tile URLs by planet build date. An area saved offline
 keeps working because the TileJSON that names those URLs is saved with it, but a
 saved Streets or Hybrid area will not pick up a newer planet without being saved

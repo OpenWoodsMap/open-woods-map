@@ -275,4 +275,25 @@ void main() {
       }
     });
   });
+
+  // Waypoint and track names are drawn on every basemap, and text draws
+  // nothing at all in a style with no glyph URL. One URL and one font across
+  // them, so glyphs an offline area of the hybrid saved are the same cached
+  // files the names ask for on satellite.
+  group('names on the map', () {
+    const font = 'Noto Sans Regular';
+    final hybridGlyphs =
+        (json.decode(readStyle('hybrid')) as Map<String, dynamic>)['glyphs'];
+
+    for (final name in ['hybrid', 'satellite', 'offline']) {
+      test('$name can draw them', () {
+        final style = json.decode(readStyle(name)) as Map<String, dynamic>;
+        expect(style['glyphs'], hybridGlyphs);
+      });
+    }
+
+    test('use a font the hybrid basemap labels with', () {
+      expect(readStyle('hybrid'), contains('"$font"'));
+    });
+  });
 }

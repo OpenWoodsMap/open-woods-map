@@ -1,11 +1,21 @@
 import 'package:flutter/material.dart';
 
+import '../settings/display_settings.dart';
 import 'overlay_controller.dart';
 
 class LayerPanel extends StatelessWidget {
-  const LayerPanel({super.key, required this.controller});
+  const LayerPanel({
+    super.key,
+    required this.controller,
+    required this.display,
+  });
 
   final OverlayController controller;
+
+  /// Here as well as the province layers because it is a thing to flip on for
+  /// a minute while working out which mark is which, and Settings is too far
+  /// away for that.
+  final DisplaySettings display;
 
   static const labels = {
     'crown_land': 'Crown land parcels',
@@ -28,7 +38,7 @@ class LayerPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       child: AnimatedBuilder(
-        animation: controller,
+        animation: Listenable.merge([controller, display]),
         builder: (context, _) => ConstrainedBox(
           // The layer list has outgrown a short sheet, and on a landscape
           // tablet it is taller than the screen. Cap the sheet and scroll the
@@ -63,6 +73,18 @@ class LayerPanel extends StatelessWidget {
                   shrinkWrap: true,
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                   children: [
+                    SwitchListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Names of your waypoints & tracks'),
+                      subtitle: const Text(
+                        'From town scale in. Where two would overlap, one '
+                        'waits until you zoom closer.',
+                      ),
+                      value: display.showNames,
+                      onChanged: display.setShowNames,
+                    ),
+                    const Divider(),
                     if (controller.availableLayerIds.isEmpty)
                       const Text(
                         'No province pack is installed, so there are no '
