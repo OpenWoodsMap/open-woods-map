@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:open_woods_map/data/models.dart';
 import 'package:open_woods_map/map/layer_panel.dart';
 import 'package:open_woods_map/map/overlay_controller.dart';
-import 'package:open_woods_map/settings/display_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 LoadedLayer _layer(String id, int featureCount) => LoadedLayer(
@@ -48,58 +47,16 @@ void main() {
   Future<void> pumpPanel(
     WidgetTester tester,
     Size size,
-    OverlayController controller, {
-    DisplaySettings? display,
-  }) async {
+    OverlayController controller,
+  ) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: LayerPanel(
-            controller: controller,
-            display: display ?? DisplaySettings(),
-          ),
-        ),
-      ),
+      MaterialApp(home: Scaffold(body: LayerPanel(controller: controller))),
     );
     await tester.pumpAndSettle();
   }
-
-  group('names on the map', () {
-    testWidgets('are off until asked for, and the switch is kept',
-        (tester) async {
-      final display = DisplaySettings();
-      await pumpPanel(
-        tester,
-        const Size(1080, 2400),
-        await _fullPack(),
-        display: display,
-      );
-
-      final names = find.widgetWithText(
-        SwitchListTile,
-        'Names of your waypoints & tracks',
-      );
-      expect(tester.widget<SwitchListTile>(names).value, isFalse);
-
-      await tester.tap(names);
-      await tester.pumpAndSettle();
-      expect(display.showNames, isTrue);
-      expect(tester.widget<SwitchListTile>(names).value, isTrue);
-
-      final reloaded = DisplaySettings();
-      await reloaded.loadPreferences();
-      expect(reloaded.showNames, isTrue);
-    });
-
-    testWidgets('are offered with no pack installed', (tester) async {
-      await pumpPanel(tester, const Size(1080, 2400), OverlayController());
-
-      expect(find.text('Names of your waypoints & tracks'), findsOneWidget);
-    });
-  });
 
   // The panel is shown in a bottom sheet, so anything past the bottom edge is
   // unreachable unless the list scrolls. This is the case that broke: a

@@ -658,6 +658,7 @@ class _MapShellState extends State<MapShell> {
               _MapMenuItem.measure => _startMeasuring(),
               _MapMenuItem.wind => _showWind(),
               _MapMenuItem.shareLocation => _shareMyLocation(),
+              _MapMenuItem.names => _toggleNames(),
               _MapMenuItem.offlinePacks => _openOfflinePacks(),
               _MapMenuItem.settings => _openSettings(),
             },
@@ -671,6 +672,17 @@ class _MapShellState extends State<MapShell> {
                       Icon(item.icon, size: 20, color: const Color(0xFF1B5E20)),
                       const SizedBox(width: 12),
                       Text(item.label),
+                      if (item == _MapMenuItem.names) ...[
+                        const SizedBox(width: 12),
+                        Icon(
+                          _display.showNames
+                              ? Icons.check_box
+                              : Icons.check_box_outline_blank,
+                          size: 20,
+                          color: const Color(0xFF1B5E20),
+                          semanticLabel: _display.showNames ? 'On' : 'Off',
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -3065,7 +3077,7 @@ class _MapShellState extends State<MapShell> {
       // Without this the sheet is capped near half the screen, which is shorter
       // than the layer list. The panel constrains its own height.
       isScrollControlled: true,
-      builder: (_) => LayerPanel(controller: _overlays, display: _display),
+      builder: (_) => LayerPanel(controller: _overlays),
     );
   }
 
@@ -3294,6 +3306,17 @@ class _MapShellState extends State<MapShell> {
   /// lost under canopy may never get a better fix, and an old position that
   /// says how old it is beats sending nothing. It never falls back to the
   /// camera centre, which would be a claim about a place nobody stood.
+  Future<void> _toggleNames() async {
+    final on = !_display.showNames;
+    await _display.setShowNames(on);
+    final zoom = _map?.cameraPosition?.zoom;
+    // Otherwise the switch appears to do nothing at the scale people usually
+    // open the map at, which reads as broken rather than as waiting.
+    if (on && zoom != null && zoom < _nameMinZoom) {
+      _toast('Names appear once you zoom in closer.');
+    }
+  }
+
   Future<void> _shareMyLocation() async {
     if (!await _ensureLocationPermission('share where you are')) return;
     Position? position;
@@ -3472,11 +3495,14 @@ class _CustomLayer {
 
 /// The screens reached from the map's overflow menu rather than from a button.
 enum _MapMenuItem {
-  // Three map tools, then the two screens you leave the map for, with a divider
+  // The map tools, then the two screens you leave the map for, with a divider
   // between them in the menu.
   measure(label: 'Measure a distance', icon: Icons.straighten),
   wind(label: 'Wind where I am', icon: Icons.air),
   shareLocation(label: 'Share my location', icon: Icons.share_location),
+  // A switch rather than a tool, but one flipped on for a minute to tell marks
+  // apart and off again, so it sits with the things reached in one tap.
+  names(label: 'Names on the map', icon: Icons.label_outline),
   // My maps is deliberately absent: it lives at the foot of the basemap sheet,
   // which is where "what is the picture under my data" is already answered.
   offlinePacks(label: 'Offline packs', icon: Icons.download_for_offline_outlined),

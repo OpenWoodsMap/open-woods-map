@@ -39,6 +39,15 @@ void main() {
     expect((await restart()).lockNorth, isTrue);
   });
 
+  test('names are off until asked for, and stay on once they are', () async {
+    expect((await restart()).showNames, isFalse);
+    await (await restart()).setShowNames(true);
+    expect((await restart()).showNames, isTrue);
+    await (await restart()).setShowNames(false);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool('waypoint.show_names'), isNull);
+  });
+
   test('the three are stored apart, so one does not reset another', () async {
     final first = await restart();
     await first.setMarkerStyle(WaypointMarkerStyle.iconOnly);
