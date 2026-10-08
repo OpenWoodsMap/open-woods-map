@@ -7,6 +7,7 @@ import '../backup/snapshot_store.dart';
 import '../tracks/track_math.dart';
 import '../settings/visibility_settings.dart';
 import '../ui/messages.dart';
+import 'bulk_edit.dart';
 import 'import_export.dart';
 import 'tag_style.dart';
 import 'undo.dart';
@@ -304,6 +305,15 @@ class _WaypointsPageState extends State<WaypointsPage> {
                 ),
               ),
               const PopupMenuDivider(),
+              PopupMenuItem(
+                enabled: visible.isNotEmpty,
+                onTap: _editShown,
+                child: Text(
+                  _filtered
+                      ? 'Edit the ${visible.length} shown…'
+                      : 'Edit all ${visible.length}…',
+                ),
+              ),
               // Scoped to what is shown, like export and delete beside them, so
               // "hide everything from 2023" is a tag chip and then this.
               PopupMenuItem(
@@ -1074,6 +1084,50 @@ class _WaypointsPageState extends State<WaypointsPage> {
         'Only items carrying no tags at all. Anything with even one tag stays, '
         'whichever section it is showing in.',
   );
+
+  /// Restyles everything shown, with an undo and no confirmation: the sheet
+  /// already says how many it changes, and nothing is lost either way.
+  Future<void> _editShown() async {
+    final shown = _visible;
+    if (shown.isEmpty) return;
+    // The sheet hands focus back to the search box when it closes, which
+    // brings the keyboard up over the result the user wants to look at.
+    FocusManager.instance.primaryFocus?.unfocus();
+    final edit = await showBulkEdit(
+      context,
+      items: shown,
+      title: _filtered
+          ? 'Edit the ${describeItems(shown)} shown'
+          : 'Edit all ${describeItems(shown)}',
+      hints: [_query, ..._selected],
+    );
+    if (edit == null || edit.isEmpty || !mounted) return;
+    final changed = applyBulkEdit(shown, edit);
+    if (changed.isEmpty) return;
+    final ids = {for (final item in changed) item.id};
+    final originals = shown.where((item) => ids.contains(item.id)).toList();
+    await widget.store.replaceAll(withEdits(widget.store.items, changed));
+    if (!mounted) return;
+    setState(_pruneFilter);
+    final skipped = edit.icon != null && shown.any((item) => item.isTrack)
+        ? ' The icon went on waypoints only; tracks are drawn as lines.'
+        : '';
+    showMessage(
+      context,
+      'Changed ${describeItems(changed)}.$skipped',
+      actionLabel: 'UNDO',
+      onAction: () async {
+        await widget.store.replaceAll(
+          revertBulkEdit(
+            current: widget.store.items,
+            originals: originals,
+            edit: edit,
+          ),
+        );
+        if (mounted) setState(_pruneFilter);
+      },
+    );
+  }
 
   /// Takes everything shown off the map, with an undo and no confirmation:
   /// nothing is lost, and the Hidden from map chip is the way back.

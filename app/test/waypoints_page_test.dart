@@ -1307,4 +1307,105 @@ void main() {
       expect(vis.isTagHidden('creek'), isFalse);
     });
   });
+
+  group('editing what is shown', () {
+    Future<WaypointStore> stocked(WidgetTester tester) => stockedWith(tester, [
+      point('1', 'North stand', tags: ['ridge']),
+      point('2', 'South stand'),
+      point('3', 'Spring', icon: WaypointIcon.water),
+      track('4', 'Drag out'),
+    ]);
+
+    Future<void> openEdit(WidgetTester tester, String label) async {
+      await tester.tap(find.byTooltip('Actions for the whole list'));
+      await settle(tester);
+      await tester.tap(find.text(label));
+      await settle(tester);
+    }
+
+    WaypointIcon iconOf(WaypointStore store, String id) =>
+        store.items.singleWhere((item) => item.id == id).icon;
+
+    // The "icons from names" case: search, see what it caught, pick the icon
+    // the search suggests. The app suggests and never picks.
+    testWidgets('a search suggests the icon and only the shown change',
+        (tester) async {
+      final store = await stocked(tester);
+      await pumpPage(tester, store);
+
+      await tester.enterText(find.byType(TextField).first, 'stand');
+      await settle(tester);
+      await openEdit(tester, 'Edit the 2 shown…');
+
+      expect(find.text('Nothing chosen yet.'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Tree stand'));
+      await settle(tester);
+      expect(find.text('Changes 2 waypoints.'), findsOneWidget);
+      await tester.tap(find.text('Apply'));
+      await settle(tester, until: find.textContaining('Changed 2 waypoints'));
+
+      expect(iconOf(store, '1'), WaypointIcon.stand);
+      expect(iconOf(store, '2'), WaypointIcon.stand);
+      expect(iconOf(store, '3'), WaypointIcon.water);
+
+      await tester.tap(find.text('UNDO'));
+      await settle(tester);
+      expect(iconOf(store, '1'), WaypointIcon.pin);
+      expect(iconOf(store, '2'), WaypointIcon.pin);
+    });
+
+    testWidgets('a tag goes on everything, tracks included', (tester) async {
+      final store = await stocked(tester);
+      await pumpPage(tester, store);
+
+      await openEdit(tester, 'Edit all 4…');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Optional. Existing tags are kept.'),
+        'Scouted',
+      );
+      await settle(tester);
+      await tester.tap(find.text('Apply'));
+      await settle(tester, until: find.textContaining('Changed'));
+
+      expect(
+        store.items.every((item) => item.tags.contains('scouted')),
+        isTrue,
+      );
+      expect(
+        store.items.singleWhere((item) => item.id == '1').tags,
+        ['ridge', 'scouted'],
+      );
+    });
+
+    testWidgets('an icon on a mixed list says tracks are left out',
+        (tester) async {
+      final store = await stocked(tester);
+      await pumpPage(tester, store);
+
+      await openEdit(tester, 'Edit all 4…');
+      expect(find.textContaining('Only the 3 waypoints take an icon'),
+          findsOneWidget);
+      await tester.tap(find.text('All icons'));
+      await settle(tester);
+      await tester.tap(find.byTooltip('Bear').first);
+      await settle(tester);
+      await tester.tap(find.text('Apply'));
+      await settle(tester, until: find.textContaining('Changed'));
+
+      expect(find.textContaining('tracks are drawn as lines'), findsOneWidget);
+      expect(iconOf(store, '4'), WaypointIcon.fallback);
+    });
+
+    testWidgets('cancelling changes nothing', (tester) async {
+      final store = await stocked(tester);
+      await pumpPage(tester, store);
+
+      await openEdit(tester, 'Edit all 4…');
+      await tester.tap(find.text('Cancel'));
+      await settle(tester);
+
+      expect(iconOf(store, '1'), WaypointIcon.pin);
+      expect(find.textContaining('Changed'), findsNothing);
+    });
+  });
 }
