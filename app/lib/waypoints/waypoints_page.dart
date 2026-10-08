@@ -8,6 +8,7 @@ import '../tracks/track_math.dart';
 import '../settings/visibility_settings.dart';
 import '../ui/messages.dart';
 import 'bulk_edit.dart';
+import 'icon_match.dart';
 import 'import_export.dart';
 import 'tag_style.dart';
 import 'undo.dart';
@@ -313,6 +314,13 @@ class _WaypointsPageState extends State<WaypointsPage> {
                       ? 'Edit the ${visible.length} shown…'
                       : 'Edit all ${visible.length}…',
                 ),
+              ),
+              PopupMenuItem(
+                enabled: visible.any(
+                  (item) => !item.isTrack && item.icon == WaypointIcon.fallback,
+                ),
+                onTap: _matchIcons,
+                child: const Text('Match icons to names…'),
               ),
               // Scoped to what is shown, like export and delete beside them, so
               // "hide everything from 2023" is a tag chip and then this.
@@ -1123,6 +1131,41 @@ class _WaypointsPageState extends State<WaypointsPage> {
             originals: originals,
             edit: edit,
           ),
+        );
+        if (mounted) setState(_pruneFilter);
+      },
+    );
+  }
+
+  /// Proposes icons for the plain pins shown, from their names, and applies
+  /// only what the user leaves ticked.
+  Future<void> _matchIcons() async {
+    final matches = matchIconsToNames(_visible);
+    if (matches.suggestions.isEmpty) {
+      showMessage(
+        context,
+        'No name here has a word that matches an icon. Search for a word '
+        'and use Edit to set one by hand.',
+      );
+      return;
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
+    final chosen = await showIconMatches(context, matches: matches);
+    if (chosen == null || chosen.isEmpty || !mounted) return;
+    final changed = [
+      for (final item in widget.store.items)
+        if (chosen[item.id] case final icon?) item.copyWith(icon: icon),
+    ];
+    await widget.store.replaceAll(withEdits(widget.store.items, changed));
+    if (!mounted) return;
+    setState(_pruneFilter);
+    showMessage(
+      context,
+      'Set icons on ${describeItems(changed)}.',
+      actionLabel: 'UNDO',
+      onAction: () async {
+        await widget.store.replaceAll(
+          revertIconMatches(current: widget.store.items, applied: chosen),
         );
         if (mounted) setState(_pruneFilter);
       },

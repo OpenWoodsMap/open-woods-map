@@ -1396,6 +1396,35 @@ void main() {
       expect(iconOf(store, '4'), WaypointIcon.fallback);
     });
 
+    testWidgets('icons from names apply only what stays ticked',
+        (tester) async {
+      final store = await stockedWith(tester, [
+        point('1', 'North stand'),
+        point('2', 'Bear Creek'),
+        point('3', 'WPT 001'),
+        point('4', 'South stand', icon: WaypointIcon.blind),
+      ]);
+      await pumpPage(tester, store);
+
+      await openEdit(tester, 'Match icons to names…');
+      expect(find.text('Tree stand'), findsOneWidget);
+      expect(find.textContaining('place name'), findsOneWidget);
+      expect(find.textContaining('1 already has its own icon'), findsOneWidget);
+      expect(find.text('Changes 1 waypoint.'), findsOneWidget);
+
+      await tester.tap(find.text('Apply'));
+      await settle(tester, until: find.textContaining('Set icons on'));
+
+      expect(iconOf(store, '1'), WaypointIcon.stand);
+      expect(iconOf(store, '2'), WaypointIcon.pin);
+      expect(iconOf(store, '3'), WaypointIcon.pin);
+      expect(iconOf(store, '4'), WaypointIcon.blind);
+
+      await tester.tap(find.text('UNDO'));
+      await settle(tester);
+      expect(iconOf(store, '1'), WaypointIcon.pin);
+    });
+
     testWidgets('cancelling changes nothing', (tester) async {
       final store = await stocked(tester);
       await pumpPage(tester, store);
