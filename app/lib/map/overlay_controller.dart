@@ -209,24 +209,19 @@ class OverlayController extends ChangeNotifier {
     final map = _map;
     if (map == null || !_added.contains(id)) return;
     final style = _styles[id]!;
-    if (style.alwaysQueryable) {
-      // Dropped to zero opacity rather than hidden: MapLibre only hit-tests
-      // layers it still renders, and Land Info resolves WMU and municipality
-      // whatever the toggles say.
-      await map.setLayerProperties(_fillId(id), _fill(id, style, value));
-      await map.setLayerProperties(_lineId(id), _line(id, style, value));
-    } else {
-      await map.setLayerVisibility(_fillId(id), value);
-      await map.setLayerVisibility(_lineId(id), value);
-    }
+    // Dropped to zero opacity rather than hidden: MapLibre only hit-tests
+    // layers it still renders, and a toggle is about what the map shows, never
+    // about what Land Info answers. Someone who hides game preserves to see the
+    // parcels underneath and then taps inside one must still be told it is a
+    // preserve; leaving it out would be a wrong answer, not a quieter one.
+    await map.setLayerProperties(_fillId(id), _fill(id, style, value));
+    await map.setLayerProperties(_lineId(id), _line(id, style, value));
   }
 
-  /// Layers a tap should be resolved against, in draw order.
-  Iterable<String> get identifiableLayerIds => layerOrder.where(
-        (id) =>
-            _added.contains(id) &&
-            (visibility[id] == true || _styles[id]!.alwaysQueryable),
-      );
+  /// Layers a tap should be resolved against, in draw order. Every installed
+  /// layer, whether or not it is switched on.
+  Iterable<String> get identifiableLayerIds =>
+      layerOrder.where(_added.contains);
 
   String fillLayerId(String id) => _fillId(id);
 
@@ -247,17 +242,13 @@ class OverlayController extends ChangeNotifier {
     await map.addLineLayer(_sourceId(id), _lineId(id), _line(id, style, visible));
   }
 
-  /// Layers kept in the style purely so they stay queryable are drawn at zero
-  /// opacity; everything else keeps its paint and toggles `visibility`.
-  bool _paintedOut(_OverlayStyle style, bool visible) =>
-      !visible && style.alwaysQueryable;
-
+  /// A switched-off layer stays in the style at zero opacity so that it stays
+  /// queryable; see [setVisible].
   FillLayerProperties _fill(String id, _OverlayStyle style, bool visible) =>
       FillLayerProperties(
         fillColor: colorFor(id),
-        fillOpacity:
-            _paintedOut(style, visible) ? 0.0 : _fillOpacityFor(style),
-        visibility: visible || style.alwaysQueryable ? 'visible' : 'none',
+        fillOpacity: visible ? _fillOpacityFor(style) : 0.0,
+        visibility: 'visible',
       );
 
   /// A plain number, or a MapLibre `case` expression where the layer draws some
@@ -278,8 +269,8 @@ class OverlayController extends ChangeNotifier {
       LineLayerProperties(
         lineColor: colorFor(id),
         lineWidth: style.lineWidth,
-        lineOpacity: _paintedOut(style, visible) ? 0.0 : 0.95,
-        visibility: visible || style.alwaysQueryable ? 'visible' : 'none',
+        lineOpacity: visible ? 0.95 : 0.0,
+        visibility: 'visible',
       );
 
   String _sourceId(String id) => 'owm-source-$id';
@@ -292,7 +283,6 @@ class _OverlayStyle {
     this.color,
     this.fillOpacity,
     this.lineWidth, {
-    this.alwaysQueryable = false,
     this.fillOpacityByBasis = const {},
   });
 
@@ -310,10 +300,6 @@ class _OverlayStyle {
   /// data-driven on the web only, so per-feature dashes cannot be done in one
   /// layer on mobile.
   final Map<String, double> fillOpacityByBasis;
-
-  /// Land Info needs this layer for seasons or by-laws even when the user has
-  /// switched its outline off.
-  final bool alwaysQueryable;
 }
 
 /// Defaults are tuned for the satellite basemap, which is the hard case: over
@@ -336,25 +322,20 @@ const _styles = <String, _OverlayStyle>{
   // refuse you entry, but no wildlife law closes this ground, and borrowing the
   // colour of a game preserve would say the wrong thing. It has to carry over
   // the amber it sits on, so it is the outline that does the work and the fill
-  // stays light enough to read the Crown parcel underneath. Always queryable:
-  // a hunt camp is small, easy to pan past, and the price of missing one is
-  // walking into somebody's yard with a rifle.
-  'crown_disposition':
-      _OverlayStyle('#AA00FF', 0.16, 2.2, alwaysQueryable: true),
+  // stays light enough to read the Crown parcel underneath.
+  'crown_disposition': _OverlayStyle('#AA00FF', 0.16, 2.2),
   // Real parcel boundaries from provincial records, so drawn solid like Crown
   // tenure. The gaps between tracts are private land.
   'municipal_forest': _OverlayStyle('#00B8D4', 0.28, 1.8),
   // Neither open nor closed: this land needs the authority's permit. Orange
   // rather than red so it reads as stop-and-ask instead of no, and distinct from
-  // the municipal forest it often adjoins. Always queryable, because these
-  // properties are small enough to miss and the price of missing one is trespass.
-  'conservation_authority':
-      _OverlayStyle('#FF6D00', 0.30, 1.8, alwaysQueryable: true),
+  // the municipal forest it often adjoins.
+  'conservation_authority': _OverlayStyle('#FF6D00', 0.30, 1.8),
   // Neutral rather than warning-coloured on purpose. This is a different
   // jurisdiction, not a wildlife closure, and white is the one hue that stays
   // legible over both bush and the pale offline basemap without borrowing the
   // vocabulary of a prohibition.
-  'first_nations': _OverlayStyle('#FAFAFA', 0.22, 2.0, alwaysQueryable: true),
+  'first_nations': _OverlayStyle('#FAFAFA', 0.22, 2.0),
   'parks': _OverlayStyle('#3949AB', 0.26, 1.6),
   // Deliberately the parks hue one step lighter, and not a colour of its own.
   // The kinship is real — same Act, same agency, adjacent designations — and the
@@ -367,23 +348,20 @@ const _styles = <String, _OverlayStyle>{
   // the ones you would otherwise be hunting, but keep separate hues: one is
   // enforced by a provincial officer and the other by a federal one, and the map
   // has to be able to say which.
-  'game_preserve': _OverlayStyle('#D50000', 0.32, 2.0, alwaysQueryable: true),
-  'federal_closure':
-      _OverlayStyle('#C2185B', 0.32, 2.0, alwaysQueryable: true),
+  'game_preserve': _OverlayStyle('#D50000', 0.32, 2.0),
+  'federal_closure': _OverlayStyle('#C2185B', 0.32, 2.0),
   // Also a closure, but a different kind: it is closed because it is a base,
   // not because of the wildlife, and slate keeps it from reading as one more
   // hunting restriction at a glance.
-  'defence_land': _OverlayStyle('#37474F', 0.32, 2.0, alwaysQueryable: true),
-  // Context, not tenure, so it is drawn almost to nothing and kept queryable:
-  // its job is to let the card tell "the atlas never reached here" apart from
-  // "no policy applies here", which is a distinction the user has to be told
-  // whether or not they asked to see the outline.
-  'land_use_plan': _OverlayStyle('#00897B', 0.01, 1.2, alwaysQueryable: true),
-  'wmu': _OverlayStyle('#6A1B9A', 0.02, 3.2, alwaysQueryable: true),
+  'defence_land': _OverlayStyle('#37474F', 0.32, 2.0),
+  // Context, not tenure, so it is drawn almost to nothing: its job is to let
+  // the card tell "the atlas never reached here" apart from "no policy applies
+  // here".
+  'land_use_plan': _OverlayStyle('#00897B', 0.01, 1.2),
+  'wmu': _OverlayStyle('#6A1B9A', 0.02, 3.2),
   // Covers most of settled southern Ontario, so the fill stays faint enough to
-  // read the tenure layers through. Queryable with the toggle off because the
-  // answer matters most where no polygon is drawn: outside these boundaries and
-  // south of the French and Mattawa rivers, Sunday gun hunting is an offence.
-  'sunday_gun': _OverlayStyle('#0288D1', 0.08, 1.2, alwaysQueryable: true),
-  'municipalities': _OverlayStyle('#4E342E', 0.01, 1.4, alwaysQueryable: true),
+  // read the tenure layers through. Outside these boundaries and south of the
+  // French and Mattawa rivers, Sunday gun hunting is an offence.
+  'sunday_gun': _OverlayStyle('#0288D1', 0.08, 1.2),
+  'municipalities': _OverlayStyle('#4E342E', 0.01, 1.4),
 };

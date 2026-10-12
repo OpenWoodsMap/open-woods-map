@@ -94,7 +94,7 @@ on Google's servers behind a redirect, which an offline app cannot follow.
 3. Report shows **local government** (bylaws) + land-use / policy notes, plus a Seasons tab keyed to the WMU.
 4. Policy docs from the pack under `policies/`.
 
-WMU and municipality are always hit-testable because Land Info needs them for seasons and by-laws; switching their outlines off drops them to zero opacity rather than hiding them, since MapLibre only queries layers it still renders.
+Every installed layer is hit-testable whether or not its toggle is on. The toggles decide what the map shows, never what Land Info answers: switching a layer off drops it to zero opacity rather than hiding it, since MapLibre only queries layers it still renders. Hiding game preserves to see the parcels underneath must not make a tap inside one come back without the preserve.
 
 ## Layer pipeline (out of band)
 

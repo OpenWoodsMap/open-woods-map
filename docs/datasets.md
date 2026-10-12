@@ -441,8 +441,8 @@ open Crown land. Intersecting the two layers:
 
 So the exposure is common but small: 15,273 Crown parcels have somebody's
 disposition on them, yet only about 1% of Crown land area. These are camp- and
-cottage-sized, which is exactly why the layer is `alwaysQueryable` and drawn with
-a strong outline over a light fill — easy to pan past, and expensive to miss.
+cottage-sized, which is exactly why the layer is drawn with a strong outline over
+a light fill — easy to pan past, and expensive to miss.
 
 **Easements are excluded** (`CLASS_SUBTYPE <> 'Crown Disposition Easement'`). A
 right of passage over Crown land does not create the exclusive occupation this
