@@ -33,6 +33,7 @@ import argparse
 import csv
 import io
 import json
+import time
 import unicodedata
 import urllib.request
 import zipfile
@@ -125,8 +126,18 @@ def download(province_id: str, *, force: bool) -> bytes:
         request = urllib.request.Request(
             url, headers={"User-Agent": "OpenWoodsMap/0.1"}
         )
-        with urllib.request.urlopen(request, timeout=300) as response:
-            archive.write_bytes(response.read())
+        # The NRCan FTP hosts go unreachable for spells, and this runs last in
+        # a half-hour rebuild.
+        for attempt in range(1, 5):
+            try:
+                with urllib.request.urlopen(request, timeout=300) as response:
+                    archive.write_bytes(response.read())
+                break
+            except OSError as error:
+                if attempt == 4:
+                    raise
+                print(f"  {error}; retrying in {60 * attempt} s", flush=True)
+                time.sleep(60 * attempt)
         print(
             f"  saved {archive.name} ({archive.stat().st_size / 1e6:.1f} MB)",
             flush=True,
