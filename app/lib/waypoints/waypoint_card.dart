@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../settings/coordinate_format.dart';
 import '../tracks/track_math.dart';
 import '../tracks/track_preview.dart';
 import 'waypoint_store.dart';
@@ -111,8 +112,8 @@ class _WaypointCard extends StatelessWidget {
           subtitle: Text(
             _isTrack
                 ? describeTrack(waypoint.track)
-                : '${waypoint.latitude.toStringAsFixed(5)}, '
-                      '${waypoint.longitude.toStringAsFixed(5)}',
+                : CoordinateFormatScope.of(context)
+                    .format(waypoint.latitude, waypoint.longitude),
           ),
         ),
         // The look, shown rather than named, so the card is the same answer as

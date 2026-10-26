@@ -74,6 +74,10 @@ each feature does, and where it stops.
   plain text with a map link, through whatever app you pick. It never falls
   back to the map centre, and a spot you tapped is shared worded as a spot on
   the map rather than where you are
+- **Coordinate format:** decimal degrees, degrees and minutes,
+  degrees-minutes-seconds or UTM, chosen in Settings, on the map's cards and
+  on waypoints. Shares, exports and map links stay in decimal degrees, and the
+  search box reads all four back whichever is chosen
 - **Names on the map:** an optional switch in the map's ⋮ menu that writes
   waypoint and track names beside them, from town scale in. Uses the basemap's
   own font, so it keeps working offline

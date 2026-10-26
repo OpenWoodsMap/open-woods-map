@@ -1,14 +1,36 @@
 import 'package:flutter/material.dart';
 
 import 'map/map_shell.dart';
+import 'settings/coordinate_format.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const OpenWoodsMapApp());
 }
 
-class OpenWoodsMapApp extends StatelessWidget {
+class OpenWoodsMapApp extends StatefulWidget {
   const OpenWoodsMapApp({super.key});
+
+  @override
+  State<OpenWoodsMapApp> createState() => _OpenWoodsMapAppState();
+}
+
+class _OpenWoodsMapAppState extends State<OpenWoodsMapApp> {
+  final _coordinateFormat = ValueNotifier(CoordinateFormat.fallback);
+
+  @override
+  void initState() {
+    super.initState();
+    CoordinateFormatScope.load().then((format) {
+      if (mounted) _coordinateFormat.value = format;
+    });
+  }
+
+  @override
+  void dispose() {
+    _coordinateFormat.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +66,10 @@ class OpenWoodsMapApp extends StatelessWidget {
           fillColor: Colors.white,
           border: OutlineInputBorder(),
         ),
+      ),
+      builder: (context, child) => CoordinateFormatScope(
+        notifier: _coordinateFormat,
+        child: child ?? const SizedBox.shrink(),
       ),
       home: const MapShell(),
     );

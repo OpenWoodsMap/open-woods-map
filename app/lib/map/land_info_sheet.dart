@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../data/models.dart';
 import '../data/province_loader.dart';
 import '../data/seasons.dart';
+import '../settings/coordinate_format.dart';
 import '../ui/messages.dart';
 import 'ask_ai.dart';
 import 'fishing_access.dart';
@@ -189,8 +190,8 @@ class _LandTab extends StatelessWidget {
           children: [
             _line(
               'Coordinates',
-              '${info.latitude.toStringAsFixed(6)}, '
-                  '${info.longitude.toStringAsFixed(6)}',
+              CoordinateFormatScope.of(context)
+                  .format(info.latitude, info.longitude, decimals: 6),
             ),
             _line('Local government', localGov ?? 'Not identified'),
             _line('WMU', wmuId == null ? 'Not identified' : 'WMU $wmuId'),

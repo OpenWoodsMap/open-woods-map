@@ -5,6 +5,7 @@ import '../backup/backup_page.dart';
 import '../backup/backup_record.dart';
 import '../backup/snapshot_store.dart';
 import '../tracks/track_math.dart';
+import '../settings/coordinate_format.dart';
 import '../settings/visibility_settings.dart';
 import '../ui/messages.dart';
 import 'bulk_edit.dart';
@@ -734,8 +735,8 @@ class _WaypointsPageState extends State<WaypointsPage> {
     // of the recording interval and tells the user nothing about the walk.
     final where = isTrack
         ? describeTrack(waypoint.track)
-        : '${waypoint.latitude.toStringAsFixed(5)}, '
-              '${waypoint.longitude.toStringAsFixed(5)}';
+        : CoordinateFormatScope.of(context)
+              .format(waypoint.latitude, waypoint.longitude);
     // A tag that is keeping this item off the map is marked in the tag list
     // rather than announced on a line of its own. The row already lists its
     // tags, and naming one twice inside five lines reads as a glitch.

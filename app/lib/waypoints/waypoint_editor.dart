@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../settings/coordinate_format.dart';
 import '../tracks/track_math.dart';
 import '../tracks/track_preview.dart';
 import '../tracks/track_style.dart';
@@ -200,8 +201,10 @@ class _WaypointEditorState extends State<WaypointEditor> {
               subtitle: Text(
                 _isLine
                     ? describeTrack(widget.existing.track)
-                    : '${widget.existing.latitude.toStringAsFixed(5)}, '
-                          '${widget.existing.longitude.toStringAsFixed(5)}',
+                    : CoordinateFormatScope.of(context).format(
+                        widget.existing.latitude,
+                        widget.existing.longitude,
+                      ),
               ),
             ),
 

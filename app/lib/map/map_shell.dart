@@ -20,6 +20,7 @@ import '../data/province_loader.dart';
 import '../offline/basemap_area_store.dart';
 import '../offline/offline_page.dart';
 import '../search/coordinate_search_sheet.dart';
+import '../settings/coordinate_format.dart';
 import '../settings/display_settings.dart';
 import '../settings/marker_style.dart';
 import '../settings/settings_page.dart';
@@ -3061,8 +3062,8 @@ class _MapShellState extends State<MapShell> {
     showMessage(
       context,
       found.placeName ??
-          '${found.latitude.toStringAsFixed(6)}, '
-              '${found.longitude.toStringAsFixed(6)}',
+          CoordinateFormatScope.of(context)
+              .format(found.latitude, found.longitude, decimals: 6),
       actionLabel: 'Land info',
       onAction: () => _identifyAt(target),
     );

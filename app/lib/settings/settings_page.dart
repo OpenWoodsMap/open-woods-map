@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../waypoints/owm_icons.dart';
 import '../waypoints/waypoint_colour.dart';
 import '../waypoints/waypoint_icon.dart';
+import 'coordinate_format.dart';
 import 'display_settings.dart';
 import 'marker_style.dart';
 
@@ -119,6 +120,8 @@ class SettingsPage extends StatelessWidget {
               style: theme.textTheme.bodySmall?.copyWith(height: 1.35),
             ),
             const Divider(height: 32),
+            const _CoordinateFormatChoice(),
+            const Divider(height: 32),
             Text('Credits', style: theme.textTheme.titleMedium),
             const SizedBox(height: 4),
             // Not a courtesy. The waypoint artwork for the animals, the
@@ -148,6 +151,66 @@ class SettingsPage extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(0, 20, 0, 8),
         child: Text(text, style: theme.textTheme.labelLarge),
       );
+}
+
+class _CoordinateFormatChoice extends StatelessWidget {
+  const _CoordinateFormatChoice();
+
+  /// Somewhere in central Ontario, so every format shows realistic digits and
+  /// hemispheres rather than a string of zeros.
+  static const _sample = (45.5440, -78.7280);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final notifier = CoordinateFormatScope.notifierOf(context);
+    final current = CoordinateFormatScope.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Coordinates', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 4),
+        const Text(
+          'How coordinates are written on the map’s cards and on waypoints. '
+          'Match whatever your GPS or paper map uses.',
+          style: TextStyle(height: 1.35),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final format in CoordinateFormat.values)
+              ChoiceChip(
+                label: Text(format.label),
+                selected: current == format,
+                onSelected: notifier == null
+                    ? null
+                    : (_) {
+                        notifier.value = format;
+                        CoordinateFormatScope.store(format);
+                      },
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'For example  ${current.format(_sample.$1, _sample.$2)}',
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Shares, exports and map links stay in decimal degrees, which every '
+          'other app reads. The search box reads all four, whichever is '
+          'chosen here, and answers in decimal so you can see how it read '
+          'what you typed. Every format is on WGS84, which a GPS set to NAD83 '
+          'matches within a couple of metres. An older paper map gridded on '
+          'NAD27 can be a couple of hundred metres off from it.',
+          style: theme.textTheme.bodySmall?.copyWith(height: 1.35),
+        ),
+      ],
+    );
+  }
 }
 
 /// What the map will draw, at the chosen style and size.

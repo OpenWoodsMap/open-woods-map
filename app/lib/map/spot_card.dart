@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/models.dart';
+import '../settings/coordinate_format.dart';
 import 'fishing_access.dart';
 import 'land_info.dart';
 import 'land_info_sheet.dart'
@@ -123,12 +124,11 @@ class SpotCard extends StatelessWidget {
   final VoidCallback onShare;
   final VoidCallback onDismiss;
 
-  String get _coordinates =>
-      '${latitude.toStringAsFixed(5)}, ${longitude.toStringAsFixed(5)}';
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final coordinates =
+        CoordinateFormatScope.of(context).format(latitude, longitude);
     final onContainer = theme.colorScheme.onSurface;
     return Card(
       color: theme.colorScheme.surfaceContainerHigh,
@@ -216,7 +216,7 @@ class SpotCard extends StatelessWidget {
               padding: const EdgeInsets.only(left: 28, bottom: 2),
               child: GestureDetector(
                 onLongPress: () async {
-                  await Clipboard.setData(ClipboardData(text: _coordinates));
+                  await Clipboard.setData(ClipboardData(text: coordinates));
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Coordinates copied')),
@@ -224,8 +224,8 @@ class SpotCard extends StatelessWidget {
                 },
                 child: Text(
                   switch (summary.detail) {
-                    final unit? => '$unit  ·  $_coordinates',
-                    null => _coordinates,
+                    final unit? => '$unit  ·  $coordinates',
+                    null => coordinates,
                   },
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: onContainer.withValues(alpha: 0.8),
