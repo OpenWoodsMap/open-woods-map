@@ -16,6 +16,7 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 import urllib.request
 import zipfile
 from datetime import datetime, timezone
@@ -30,10 +31,26 @@ CLUPA_TMP = GIS / "_tmp_clupapro"
 CLUPA_ZIP = CLUPA_TMP / "CLUPAPRO.zip"
 
 
-def run(script: str, *args: str) -> None:
+def run(script: str, *args: str, attempts: int = 1) -> None:
     cmd = [sys.executable, str(GIS / script), *args]
-    print(f"\n==> {' '.join(cmd)}", flush=True)
-    subprocess.run(cmd, check=True, cwd=str(GIS))
+    for attempt in range(1, attempts + 1):
+        print(f"\n==> {' '.join(cmd)}", flush=True)
+        try:
+            subprocess.run(cmd, check=True, cwd=str(GIS))
+            return
+        except subprocess.CalledProcessError:
+            if attempt == attempts:
+                raise
+            print(f"failed; running it again in {120 * attempt} s", flush=True)
+            time.sleep(120 * attempt)
+
+
+def fetch(script: str, *args: str) -> None:
+    # Every source here is a government service that goes down for spells or
+    # answers with an error page, and one bad answer otherwise ends an
+    # hour-long rebuild. Build steps and the audit are deterministic and get
+    # no retry: running them again cannot change their answer.
+    run(script, *args, attempts=3)
 
 
 def download_clupapro(*, force: bool = False) -> None:
@@ -90,20 +107,20 @@ def rebuild_on(*, skip_clupa_download: bool) -> None:
     # Legal text first: parks read their hunting permission from O. Reg. 663/98
     # Part 3, and the Sunday gun overlay is built from Part 7 of the same
     # regulation. Without this the parks layer cannot state a permission.
-    run("parse_reg663_on.py")
+    fetch("parse_reg663_on.py")
     # The Act behind the regulation. It carries the one Algonquin opening the
     # regulation does not, and the subsection that makes a conservation reserve
     # open by default, so both the parks and reserve layers read from it.
-    run("parse_ppcra_on.py")
+    fetch("parse_ppcra_on.py")
     # Federal closures read their prohibitions from the Justice Laws
     # consolidation, so the rules are parsed before the geometry is attributed.
-    run("parse_federal_wildlife_regs.py")
+    fetch("parse_federal_wildlife_regs.py")
     # parks must exist before crown so protected parcels can be flagged
-    run("fetch_wmu_parks_on.py")
-    run("fetch_conservation_reserve_on.py")
-    run("fetch_municipalities_on.py")
+    fetch("fetch_wmu_parks_on.py")
+    fetch("fetch_conservation_reserve_on.py")
+    fetch("fetch_municipalities_on.py")
     # Needs municipalities and townships, so it runs after both
-    run("fetch_townships_on.py")
+    fetch("fetch_townships_on.py")
     # The divide has to exist before the schedule is assembled, because the
     # Sunday gun layer appends it. Without it the layer still builds and still
     # looks right, but every point north of the French and Mattawa rivers loses
@@ -111,41 +128,41 @@ def rebuild_on(*, skip_clupa_download: bool) -> None:
     run("build_sunday_divide_on.py")
     run("build_sunday_gun_on.py")
     # Public forest tracts (county/regional/municipal) at parcel level
-    run("fetch_agreement_forest_on.py")
+    fetch("fetch_agreement_forest_on.py")
     # Closures drawn over the tenure layers (FWCA s. 9)
-    run("fetch_game_preserve_on.py")
+    fetch("fetch_game_preserve_on.py")
     # Conservation authority land and the federal closures, both from CPCAD
-    run("fetch_cpcad_on.py")
+    fetch("fetch_cpcad_on.py")
     # Land an Ontario licence does not reach, from the two federal registers
-    run("fetch_first_nations_on.py")
-    run("fetch_defence_land_on.py")
+    fetch("fetch_first_nations_on.py")
+    fetch("fetch_defence_land_on.py")
     # Context for the Far North, where the policy atlas runs out
-    run("fetch_land_use_plan_on.py")
+    fetch("fetch_land_use_plan_on.py")
     # Boat launches and shore access, the first layer that is not about land
-    run("fetch_fishing_access_on.py")
+    fetch("fetch_fishing_access_on.py")
     download_clupapro(force=not skip_clupa_download)
-    run("fetch_unpatented_on.py")
+    fetch("fetch_unpatented_on.py")
     # Build-time only, and nothing from it ships: Ontario's tenure record covers
     # lake beds, so without this the card in the middle of open water is the card
     # for dry ground.
-    run("fetch_hydrography_on.py")
+    fetch("fetch_hydrography_on.py")
     # Crown tenure parcels + CLUPA designation/permitted-use attributes
     run("build_crown_on.py")
     # Who else occupies that tenure. Half of it carries no land use policy, so
     # without this a leased hunt camp is drawn as ordinary open Crown land.
-    run("fetch_dispositions_on.py")
+    fetch("fetch_dispositions_on.py")
     # Official policy text keyed by the policy_id carried on those parcels
     run("build_policies_on.py")
     # Point data rather than geometry, but it is a per-province source fetch and
     # the pack is incomplete without it
-    run("fetch_cgndb.py", "--province", "on")
+    fetch("fetch_cgndb.py", "--province", "on")
     stamp_manifest("on")
 
 
 def rebuild_qc() -> None:
-    run("fetch_qc_real.py")
-    run("fetch_municipalities_qc.py")
-    run("fetch_cgndb.py", "--province", "qc")
+    fetch("fetch_qc_real.py")
+    fetch("fetch_municipalities_qc.py")
+    fetch("fetch_cgndb.py", "--province", "qc")
     stamp_manifest("qc")
 
 
