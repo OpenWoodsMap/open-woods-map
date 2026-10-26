@@ -36,9 +36,11 @@ on:
         required: true
         default: all
         type: choice
+        # Quoted because YAML 1.1 reads a bare `on` as true, and GitHub then
+        # refuses `on` as a choice that is not in the list.
         options:
           - all
-          - on
+          - "on"
           - qc
       publish:
         description: Publish / update the packs-latest GitHub Release
