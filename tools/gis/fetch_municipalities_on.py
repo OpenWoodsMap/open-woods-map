@@ -43,13 +43,26 @@ PAGE_SIZE = 200
 SIMPLIFY_DEGREES = 0.001
 
 
-def _query(params: dict) -> dict:
+def _query(params: dict, attempts: int = 4) -> dict:
+    # LIO answers now and then with an HTML error page or a JSON error object
+    # instead of data, and either would otherwise end a half-hour rebuild.
     url = f"{LAYER_URL}?{urllib.parse.urlencode(params)}"
-    with urllib.request.urlopen(url, timeout=300) as response:
-        text = response.read().decode("utf-8", errors="replace").strip()
-    if not text or text[0] not in "{[":
-        raise ValueError(f"Non-JSON: {text[:160]!r}")
-    return json.loads(text)
+    for attempt in range(1, attempts + 1):
+        try:
+            with urllib.request.urlopen(url, timeout=300) as response:
+                text = response.read().decode("utf-8", errors="replace").strip()
+            if not text or text[0] not in "{[":
+                raise ValueError(f"Non-JSON: {text[:160]!r}")
+            payload = json.loads(text)
+            if isinstance(payload, dict) and "error" in payload:
+                raise ValueError(f"Service error: {payload['error']}")
+            return payload
+        except (OSError, ValueError) as error:
+            if attempt == attempts:
+                raise
+            print(f"  {error}; retrying in {20 * attempt} s", flush=True)
+            time.sleep(20 * attempt)
+    raise AssertionError("unreachable")
 
 
 def _has_geometry(feature: dict) -> bool:
@@ -125,7 +138,8 @@ def fetch_all() -> list[dict]:
                             "returnGeometry": "true",
                             "outSR": "4326",
                             "f": "geojson",
-                        }
+                        },
+                        attempts=1,
                     )
                 except Exception as error:  # noqa: BLE001
                     print(f"  OGF_ID {identifier}: {error}", file=sys.stderr)
