@@ -1,22 +1,154 @@
-# OpenWoodsMap
+<h1 align="center">🌲 OpenWoodsMap</h1>
 
-Offline-first Canadian land map for **Android**: Crown land, parks, WMUs, and municipalities — with tap-to-identify Land Info (local government + land-use report). No accounts, no servers, no paid map APIs. Free, and no paywall ever.
+<p align="center">
+  <b>Whose land am I standing on, and what are the rules here?</b><br>
+  A free, offline map for Canadians heading outdoors. No signal, no account, no catch.
+</p>
 
-Anyone heading out needs the same two things: a map that works with no signal, and a straight answer about whose land they are standing on. That part serves hikers, anglers and hunters alike. On top of it, the deepest work so far is hunting legality — seasons, closures and the regulations behind them — because that is where a wrong answer costs the most. Hiking- and fishing-specific features are not built yet, and this README will say so until they are.
+<p align="center">
+  <a href="https://github.com/OpenWoodsMap/open-woods-map/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/OpenWoodsMap/open-woods-map?label=download&color=2e7d32"></a>
+  <img alt="Platform: Android" src="https://img.shields.io/badge/platform-Android-3ddc84">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
+</p>
 
-**Stack:** Flutter + MapLibre · GeoJSON · zero-infra (app bundle + GitHub Releases)
+---
 
-**Targets:** Android. On a Windows PC or an Apple Silicon Mac, run the Android build in an emulator such as [BlueStacks](https://www.bluestacks.com/) or Android Studio’s emulator.
+OpenWoodsMap shows Crown land, parks, closures, wildlife management units and
+municipalities on a map that keeps working with no signal. Tap anywhere and it
+tells you whose land it is, what designation and policy apply, and which hunting
+seasons are open.
 
-**No iOS build**, and that is deliberate rather than unfinished: the code targets
-iOS, but every free way to install an app on an iPhone stops working after seven
-days and needs a network connection to be renewed, which is unacceptable for an
-app meant to answer a legal question with no signal. iPhone owners can run the
-Android build in a desktop emulator to study boundaries before heading out —
-there is no GPS there, so it is a map for the kitchen table, not one to carry.
-The reasoning, and what would change it, is in [docs/ios.md](docs/ios.md).
+Anyone heading out needs the same two things: a map that works with no signal,
+and a straight answer about whose land they are standing on. That part serves
+hikers, anglers and hunters alike. On top of it, the deepest work so far is
+hunting legality, because that is where a wrong answer costs the most.
+Hiking- and fishing-specific features are not built yet, and this README will
+say so until they are.
 
-## Quick start
+> ⚠️ **A planning aid, not the law.** Boundaries come from provincial records and
+> are not a legal survey. Check the regulations, posted signs and local bylaws
+> before you hunt or camp.
+
+## 📥 Get it
+
+1. Download the APK from the [latest release](https://github.com/OpenWoodsMap/open-woods-map/releases/latest)
+   and install it on your Android phone.
+2. On first launch, pick a province and the app downloads its data pack.
+3. For updates, point [Obtainium](https://github.com/ImranR98/Obtainium) at
+   this repository.
+
+Android only. There is no iPhone build, and that is deliberate: every free way
+to install an app on an iPhone expires after seven days and needs a connection
+to renew, which is no good for a map meant to work in the bush.
+[docs/ios.md](docs/ios.md) explains, and what would change it. On a Windows PC
+or an Apple Silicon Mac, the Android build runs in an emulator such as
+[BlueStacks](https://www.bluestacks.com/) for planning at the kitchen table.
+
+## 🤝 Other free tools worth using
+
+OpenWoodsMap is not the only project trying to make this information free and
+easy to find, and it should not be the only map you check. These share the same
+goal and do some things better. Use them side by side: where two maps disagree,
+the province's own data and the signs on the ground win.
+
+### 🏮 [Lantern](https://www.lanternsearch.ca/)
+
+A free, donation-supported web map of Ontario Crown land, drawn from the
+province's Crown Land Use Policy Atlas. Excellent on a computer for browsing
+designations such as general use areas, conservation reserves and parks.
+
+- 📦 Offers its Ontario Crown land layer as a **free GeoJSON or Shapefile
+  download** for QGIS, ArcGIS or any other mapping app
+- 📌 Save locations without an account
+- 🗺️ Ontario only
+
+### 🌲 [Jackpine Outdoors](https://jackpineoutdoors.ca/)
+
+A hunting and camping map for the web and Android, covering every province and
+territory, with Ontario, Saskatchewan, New Brunswick and Nova Scotia fully
+checked and the rest in beta.
+
+- 🦌 Crown land and WMU seasons, "can I hunt or camp here?" with leases and
+  mining claims
+- 🪓 Cutovers by age, planned cuts, fire history and forest type: great for
+  finding regrowth and browse
+- 🎯 Habitat "hotzones", trip planning, wind plans and campsite suggestions
+- 📴 Works offline, and the Android app records tracks with the screen off
+- 💳 The Crown land and season map is free to use. A free account adds one
+  offline area and 100 saved spots and routes; the paid Pro tier lifts those
+  limits and adds sync
+
+*Know of another free tool that belongs here? Open an issue and it will be
+added.*
+
+## 🧭 What OpenWoodsMap stands for
+
+- 📴 **Offline first.** Identify, layers, Land Info and seasons all work with no
+  signal. Weather is the one exception, and it says so.
+- 🔒 **Your data is yours.** Waypoints, tracks and saved maps live on your
+  phone and nowhere else. No account, no cloud, no database somewhere holding
+  your spots. Export everything at any time in open formats: GPX, KML, GeoJSON.
+  Like any online map, the basemap fetches tiles for the ground you look at.
+  Beyond that, the only coordinate the app sends anywhere is to
+  [Open-Meteo](https://open-meteo.com/) when you ask for weather or wind.
+- 💸 **Free forever.** No ads, no subscription, no paywalled limits on waypoints,
+  tracks or offline areas. The only limit is your phone's storage.
+- 🧾 **Honest answers.** The app never invents data, and never sounds more
+  certain than its sources. "The rule says no" and "we have no record" are
+  different answers, and it says which one you are getting.
+- 🛠️ **Open source.** MIT licensed. Copy it, fork it, take the ideas into
+  your own app. That is the point.
+- 🏗️ **Nothing to keep running.** No servers and no paid APIs. Map data comes
+  from open government sources and ships as downloadable packs on GitHub
+  Releases, which is why it can stay free.
+
+## ✨ Features
+
+**🗺️ Land and rules**
+- Tap anywhere for **Land Info**: local government for bylaws, Crown land
+  tenure, designation, land use policy and the WMU
+- **Closures first:** Crown game preserves, national wildlife areas, bird
+  sanctuaries and defence property are flagged above the tenure underneath
+- **Permission needed:** First Nations reserves and conservation authority land
+  are reported as "ask first", not as open or closed
+- **Provincial parks:** hunting permissions read from the regulation, with the
+  parks that open only part of their ground saying so
+- **Sunday gun hunting:** whether it is permitted at the point you tapped
+- **Seasons:** every species with a published WMU table, open now, upcoming or
+  closed, filtered by residency
+
+**📴 Maps and offline**
+- Offline, streets, satellite and hybrid basemaps, with Ontario and Quebec
+  aerial photography
+- **Save offline areas** at the detail you choose, with the size shown first
+- 🖼️ **My maps:** bring your own imagery, a Garmin Custom Map KMZ or an XYZ
+  tile URL, drawn over the basemap and under the land layers
+- Province data packs that refresh without an app update
+
+**📍 Waypoints and tracks**
+- Mark where you stand, record GPS tracks, follow a track back
+- Import and export GPX, KML and GeoJSON
+- Search, tag, hide, bulk edit, and match icons to names after an import
+- Optional names on the map
+- **Backup and restore**, with rolling on-phone snapshots
+
+**🧰 Tools**
+- 📏 Measure a distance
+- 💨 Wind where you are, and a weather tab with legal light times
+- 📤 Share your location or a spot as text with a map link
+
+The long version, with what each feature does and where it stops, is in
+[docs/features.md](docs/features.md).
+
+## 📍 Coverage
+
+| Province | Status |
+|----------|--------|
+| 🟢 Ontario | Real and reasonably complete: tenure, closures, parks, seasons and policies |
+| 🟡 Quebec | Preview: real zones and boundaries, no seasons or policies yet |
+| ⚪ Everywhere else | Not yet |
+
+## 🛠️ Build from source
 
 ```powershell
 $env:PATH = "C:\_stuff\dev\tools\flutter\bin;$env:PATH"
@@ -27,149 +159,12 @@ flutter pub get
 flutter run   # Android device or emulator
 ```
 
-Build a sideload APK: [docs/android_apk.md](docs/android_apk.md).
+Build a sideload APK: [docs/android_apk.md](docs/android_apk.md). Built with
+Flutter and MapLibre.
 
-## Features
+## 📚 Docs
 
-- Province switcher (Ontario, plus Quebec flagged **preview** — real zones and
-  boundaries, but no seasons or policies yet)
-- Overlay toggles (crown land, municipal & county forests, conservation
-  authority land, reserves, parks, Crown game preserves, federal wildlife areas
-  and bird sanctuaries, defence property, WMU, Sunday gun hunting,
-  municipalities)
-- **Closures outrank tenure:** Crown game preserves, National Wildlife Areas,
-  Migratory Bird Sanctuaries and National Defence property are drawn over Crown
-  land and reported first, since hunting there is prohibited whatever the tenure
-  underneath says. In a bird sanctuary possessing *any* firearm is itself an
-  offence, which is the part a deer hunter walking through would not expect
-- **Permission-required land is neither open nor closed:** 409 conservation
-  authority properties name the authority to ask, and 203 reserves are reported
-  as needing the First Nation's permission — an Ontario licence conveys no right
-  of access to reserve land, which is a different answer from "prohibited" and
-  is worded like one. Where the conservation authority source draws nothing the
-  card says that its silence is not permission
-- **Defence property, with the caveat:** 140 National Defence properties
-  totalling 51,309 ha, including Petawawa, Borden and Meaford. Closed to public
-  hunting, but some bases run their own controlled hunts, so the card links the
-  property's federal record rather than naming programmes a pack cannot keep
-  current
-- **The Far North says why it is empty:** above the Far North line the policy
-  atlas thins out to nothing, so a parcel with no policy report is reported as
-  ground the atlas never reached rather than ground no policy applies to. Where
-  one of the four community based land use plans covers the point, the card
-  names it and links the document while making clear it is not a hunting
-  regulation
-- **Park permissions from the regulation, not guesswork:** hunting in an Ontario
-  provincial park is prohibited unless O. Reg. 663/98 Part 3 opens it. Parks the
-  regulation opens in whole read as permitted; the 35 it opens only a surveyed
-  part of say so plainly, because the province describes that part in words and
-  never mapped it. Carve-outs are quoted verbatim
-- **Sunday gun hunting:** permitted north of the French and Mattawa rivers, and
-  south of them only in the 193 jurisdictions the regulation schedules. The card
-  says which case applies at the tapped point
-- **Land Info:** tap anywhere for a small card naming the ground and flagging any
-  closure or condition on it, then *Land info* for the full three-tab report —
-  *Land* (local government for bylaws, land tenure, designation, policy),
-  *Seasons* and *Weather*. Land-use policies read offline from the pack, with a
-  link to the official live report. The small card never says hunting is
-  permitted: a yes is only honest beside the regulation it comes from
-- On-screen zoom buttons alongside pinch-zoom
-- **Measure a distance:** tap along the map for a running total, the straight
-  line end to end, and the heading of the last leg. Map distance, so it ignores
-  the ground going up and down — a phone's elevation readings are not good
-  enough to claim otherwise
-- **Wind where you are:** one line in the corner saying which way the wind is
-  coming from, how hard, and which way it is therefore blowing, with an arrow
-  that turns with the map. It says it is a forecast ten metres up rather than a
-  measurement in the trees, and how old the reading is. Needs a connection
-- **Seasons:** every species with a published WMU season table, split into
-  open now / upcoming / closed, filterable by game group and residency
-- **Weather:** current conditions and wind direction for the tapped point, legal
-  light times, best sits for the day, and a 7-day outlook. Includes an optional
-  deer activity graph — an openly documented heuristic, not a prediction, with
-  the reasons behind every hour shown and moon phase deliberately left out. The
-  only feature that needs a connection
-- Waypoints + GPS track recording; GPX / KML / GeoJSON import-export. One button
-  marks where you are standing, from a fresh fix rather than wherever the map
-  happens to be pointing, and says so in the note when the fix was a rough one
-- **Backup & restore:** the app keeps rolling copies of your list on the phone
-  so a bulk delete or a bad import is recoverable long after the undo has gone,
-  and makes a complete backup file you can put wherever you like. The file is
-  plain GeoJSON any other tool reads, with tag styling in a member they ignore.
-  It will tell you when you last made one; it will not pretend to know you kept
-  it. See [docs/backup.md](docs/backup.md)
-- Opens on your own position, once per launch. If location is off or refused it
-  falls back to the province without complaining, and switching basemaps keeps
-  the view exactly where you left it
-- Basemaps: offline / streets / satellite / hybrid. Satellite is Ontario aerial
-  photography to z19 and Quebec's ecoforest-inventory aerial mosaic to z18 west
-  of the Gaspé, with global Sentinel-2 elsewhere; hybrid stacks OpenFreeMap's
-  roads, watercourses, boundaries and place names on top of it
-- **Basemap areas:** save the ground you actually use for offline use, at a
-  detail level you choose, with the size estimated before you commit and the
-  overlap with anything already saved deducted from it
-- **Province packs:** download from GitHub Releases or import a ZIP on device
-- **My maps:** bring your own imagery, either a Garmin Custom Map KMZ from the
-  phone or an XYZ tile URL, drawn over the basemap and under the land layers
-
-### Province packs
-
-Nothing province-specific is baked into the binary. Overlays, policies and
-seasons all live in a downloadable pack, so data can be refreshed without a
-store release and the app installs small.
-
-### Basemap areas
-
-Province packs make the *data* work offline. The basemap underneath it still
-streams, so Streets, Satellite and Hybrid go blank without a signal. Saving an
-area fixes that for the ground that matters to you.
-
-Pick the area by framing it on the map, choose Overview, Standard or Detailed,
-and the estimate updates as you pan. Tiles are shared between areas and between
-basemaps, so re-saving somewhere you already have costs only the difference, and
-the estimate says so. Storage is listed per basemap, alongside the true total on
-disk — which is smaller than the sum of the parts wherever areas overlap.
-
-Roughly what to expect for a phone-sized viewport of about 27 × 28 km:
-
-| Detail | Good for | Satellite | Hybrid | Streets |
-|--------|----------|-----------|--------|---------|
-| Overview (z12) | Lakes, highways, towns | ~2 MB | ~4 MB | ~2 MB |
-| Standard (z14) | Side roads and bush roads | ~20 MB | ~42 MB | ~22 MB |
-| Detailed (z16) | Individual trees and trails | ~200 MB | ~220 MB | n/a |
-
-Streets stops at Standard because OpenFreeMap's vector tiles stop at zoom 14;
-the map still zooms in past that, it just stops gaining detail.
-
-| Ontario layer | Approx. features |
-|---------------|------------------|
-| Crown land parcels (MNR unpatented + CLUPA) | ~42,700 |
-| Municipalities | ~685 |
-| Geographic townships | ~2,500 |
-| Provincial parks | ~340 |
-| WMUs | ~150 |
-| Hunting seasons | 21 species across 150 WMUs |
-
-### My maps
-
-Paper and PDF maps of a park or a management unit are often better than any
-basemap for the ground they cover, and the people who draw them usually publish
-a Garmin Custom Map KMZ — a zip of JPEG tiles with corner coordinates, which is
-close enough to what MapLibre draws that the phone needs no conversion step.
-Import one and it works with no signal. An XYZ tile URL works too, and does not.
-
-Both draw above the basemap and below every land layer, because imagery is
-something to read the ground by and tenure is the answer this app exists to
-give. Where two of your own maps cover the same ground, the one higher in the
-list wins.
-
-What is deliberately not supported: WMS addresses, GeoTIFF and MBTiles files.
-The first asks for a picture of a bounding box rather than numbered tiles, and
-the other two would mean reprojecting and re-tiling gigabytes on a phone. All
-three are refused by name rather than failing quietly.
-
-## Docs
-
+- [Features in detail](docs/features.md)
 - [Architecture](docs/architecture.md)
 - [Datasets](docs/datasets.md)
 - [Constraints](docs/constraints.md)
@@ -181,6 +176,6 @@ three are refused by name rather than failing quietly.
 - [Backup](docs/backup.md)
 - [GIS pipeline](tools/gis/README.md)
 
-## License
+## 📄 License
 
 MIT — see [LICENSE](LICENSE).
