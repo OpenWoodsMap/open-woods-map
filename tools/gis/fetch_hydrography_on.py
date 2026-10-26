@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -46,14 +47,21 @@ PAGE = 1000
 SIMPLIFY = 0.0005
 
 
-def query(params: dict) -> dict:
+def query(params: dict, attempts: int = 3) -> dict:
+    # LIO now and then answers a page with an HTML error page, and one bad
+    # page would otherwise fail the whole monthly rebuild and publish nothing.
     full = f"{URL}?{urllib.parse.urlencode(params)}"
     request = urllib.request.Request(full, headers={"User-Agent": "OpenWoodsMap/1.0"})
-    with urllib.request.urlopen(request, timeout=600) as response:
-        text = response.read().decode("utf-8", errors="replace").strip()
-    if not text or text[0] not in "{[":
-        raise ValueError(text[:200])
-    return json.loads(text)
+    for attempt in range(1, attempts + 1):
+        with urllib.request.urlopen(request, timeout=600) as response:
+            text = response.read().decode("utf-8", errors="replace").strip()
+        if text and text[0] in "{[":
+            return json.loads(text)
+        if attempt == attempts:
+            raise ValueError(text[:200])
+        print(f"  not JSON, retrying in {30 * attempt} s", flush=True)
+        time.sleep(30 * attempt)
+    raise AssertionError("unreachable")
 
 
 def main() -> int:
