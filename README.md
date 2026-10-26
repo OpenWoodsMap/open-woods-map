@@ -22,8 +22,9 @@ Anyone heading out needs the same two things: a map that works with no signal,
 and a straight answer about whose land they are standing on. That part serves
 hikers, anglers and hunters alike. On top of it, the deepest work so far is
 hunting legality, because that is where a wrong answer costs the most.
-Hiking- and fishing-specific features are not built yet, and this README will
-say so until they are.
+For anglers there is one so far: Ontario's published boat launches and shore
+access sites. Fishing regulations and anything hiking-specific are not built
+yet, and this README will say so until they are.
 
 > ⚠️ **A planning aid, not the law.** Boundaries come from provincial records and
 > are not a legal survey. Check the regulations, posted signs and local bylaws
@@ -116,6 +117,9 @@ added.*
 - **Sunday gun hunting:** whether it is permitted at the point you tapped
 - **Seasons:** every species with a published WMU table, open now, upcoming or
   closed, filtered by residency
+- 🎣 **Fishing access (Ontario):** about 2,400 boat launches, docks and shore
+  access sites, with parking, fees and ramp surface where the province recorded
+  them
 
 **📴 Maps and offline**
 - Offline, streets, satellite and hybrid basemaps, with Ontario and Quebec

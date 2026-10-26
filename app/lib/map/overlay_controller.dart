@@ -33,7 +33,14 @@ class OverlayController extends ChangeNotifier {
     'wmu',
     'sunday_gun',
     'municipalities',
+    // Points last, so no fill is ever drawn over the dot a thumb is aiming at.
+    'fishing_access',
   ];
+
+  /// Layers drawn as dots rather than as filled outlines.
+  static const pointLayers = {'fishing_access'};
+
+  static bool isPointLayer(String id) => pointLayers.contains(id);
 
   static const _colorPrefKey = 'overlay.colors';
 
@@ -150,8 +157,15 @@ class OverlayController extends ChangeNotifier {
 
     final map = _map;
     if (map == null || !_added.contains(id)) return;
+    await _paint(map, id, visibility[id] == true);
+  }
+
+  Future<void> _paint(MapLibreMapController map, String id, bool visible) async {
     final style = _styles[id]!;
-    final visible = visibility[id] == true;
+    if (isPointLayer(id)) {
+      await map.setLayerProperties(_circleId(id), _circle(id, style, visible));
+      return;
+    }
     await map.setLayerProperties(_fillId(id), _fill(id, style, visible));
     await map.setLayerProperties(_lineId(id), _line(id, style, visible));
   }
@@ -174,8 +188,12 @@ class OverlayController extends ChangeNotifier {
       // A style reload drops the layers underneath us, so removal is
       // best-effort rather than a reason to fail the whole attach.
       for (final removal in [
-        () => map.removeLayer(_fillId(id)),
-        () => map.removeLayer(_lineId(id)),
+        if (isPointLayer(id))
+          () => map.removeLayer(_circleId(id))
+        else ...[
+          () => map.removeLayer(_fillId(id)),
+          () => map.removeLayer(_lineId(id)),
+        ],
         () => map.removeSource(_sourceId(id)),
       ]) {
         try {
@@ -208,14 +226,12 @@ class OverlayController extends ChangeNotifier {
     }
     final map = _map;
     if (map == null || !_added.contains(id)) return;
-    final style = _styles[id]!;
     // Dropped to zero opacity rather than hidden: MapLibre only hit-tests
     // layers it still renders, and a toggle is about what the map shows, never
     // about what Land Info answers. Someone who hides game preserves to see the
     // parcels underneath and then taps inside one must still be told it is a
     // preserve; leaving it out would be a wrong answer, not a quieter one.
-    await map.setLayerProperties(_fillId(id), _fill(id, style, value));
-    await map.setLayerProperties(_lineId(id), _line(id, style, value));
+    await _paint(map, id, value);
   }
 
   /// Layers a tap should be resolved against, in draw order. Every installed
@@ -223,7 +239,8 @@ class OverlayController extends ChangeNotifier {
   Iterable<String> get identifiableLayerIds =>
       layerOrder.where(_added.contains);
 
-  String fillLayerId(String id) => _fillId(id);
+  /// The style layer a tap on [id] is resolved against.
+  String hitLayerId(String id) => isPointLayer(id) ? _circleId(id) : _fillId(id);
 
   Future<void> _addLayer(
     MapLibreMapController map,
@@ -238,6 +255,14 @@ class OverlayController extends ChangeNotifier {
       // natively, which keeps 40k-parcel layers off the Dart and Android heaps.
       GeojsonSourceProperties(data: layer.sourceUri),
     );
+    if (isPointLayer(id)) {
+      await map.addCircleLayer(
+        _sourceId(id),
+        _circleId(id),
+        _circle(id, style, visible),
+      );
+      return;
+    }
     await map.addFillLayer(_sourceId(id), _fillId(id), _fill(id, style, visible));
     await map.addLineLayer(_sourceId(id), _lineId(id), _line(id, style, visible));
   }
@@ -273,9 +298,35 @@ class OverlayController extends ChangeNotifier {
         visibility: 'visible',
       );
 
+  /// Small at province scale, where two thousand launches would otherwise read
+  /// as a rash, and finger-sized by the time individual lakes are on screen.
+  /// The white ring keeps a dot legible on water, which is where every one of
+  /// them sits.
+  CircleLayerProperties _circle(String id, _OverlayStyle style, bool visible) =>
+      CircleLayerProperties(
+        circleColor: colorFor(id),
+        circleRadius: const [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          5,
+          2.0,
+          10,
+          4.0,
+          14,
+          7.0,
+        ],
+        circleOpacity: visible ? 0.95 : 0.0,
+        circleStrokeColor: '#FFFFFF',
+        circleStrokeWidth: style.lineWidth,
+        circleStrokeOpacity: visible ? 0.95 : 0.0,
+        visibility: 'visible',
+      );
+
   String _sourceId(String id) => 'owm-source-$id';
   String _fillId(String id) => 'owm-fill-$id';
   String _lineId(String id) => 'owm-line-$id';
+  String _circleId(String id) => 'owm-circle-$id';
 }
 
 class _OverlayStyle {
@@ -364,4 +415,8 @@ const _styles = <String, _OverlayStyle>{
   // French and Mattawa rivers, Sunday gun hunting is an offence.
   'sunday_gun': _OverlayStyle('#0288D1', 0.08, 1.2),
   'municipalities': _OverlayStyle('#4E342E', 0.01, 1.4),
+  // A dot, so fill opacity is unused and line width is the white ring. Blue
+  // because every one of these is the edge of the water, and deep enough to
+  // stand out against the pale blue lakes the offline basemap draws them on.
+  'fishing_access': _OverlayStyle('#0D47A1', 0.0, 1.5),
 };

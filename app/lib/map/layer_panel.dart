@@ -22,6 +22,7 @@ class LayerPanel extends StatelessWidget {
     'wmu': 'Wildlife management units',
     'sunday_gun': 'Sunday gun hunting permitted',
     'municipalities': 'Municipalities (bylaws)',
+    'fishing_access': 'Fishing access (launches & shore)',
   };
 
   @override

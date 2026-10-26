@@ -167,6 +167,12 @@ class LandInfo {
             if (entry.value.coverageNote case final note?) note,
       ];
 
+  /// Fishing access sites the tap landed on. A place on the shore and not a
+  /// landholding, so it never joins [landUse] and never says anything about
+  /// whether the ground around it is open.
+  List<LandFeature> get fishingAccess =>
+      hits.where((feature) => feature.layerId == 'fishing_access').toList();
+
   LandFeature? get wmu =>
       hits.firstWhereOrNull((feature) => feature.layerId == 'wmu');
 

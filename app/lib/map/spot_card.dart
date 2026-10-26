@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../data/models.dart';
+import 'fishing_access.dart';
 import 'land_info.dart';
 import 'land_info_sheet.dart'
     show featureTitle, huntingVerdict, verdictSoundsPermissive;
@@ -17,8 +18,14 @@ class SpotSummary {
     this.status,
     this.statusColour,
     this.detail,
+    this.access,
     this.closed = false,
   });
+
+  /// A fishing access site under the tap, named. Beside the land answer rather
+  /// than in place of it: the launch is what was aimed at, but whose shore it
+  /// sits on is still the question the card exists for.
+  final String? access;
 
   /// No province pack, so there is nothing to say about the ground at all. Not
   /// the same sentence as nothing being on record, which is an answer from a
@@ -59,10 +66,18 @@ class SpotSummary {
 /// card. So this card can raise a doubt and never settle one.
 SpotSummary spotSummary(LandInfo info, Map<String, LoadedLayer> layers) {
   final unit = info.wmuId == null ? null : 'WMU ${info.wmuId}';
+  final sites = info.fishingAccess;
+  final access = switch (sites.length) {
+    0 => null,
+    1 => fishingAccessTitle(sites.first, layers['fishing_access']),
+    final n =>
+      '${fishingAccessTitle(sites.first, layers['fishing_access'])} '
+          'and ${n - 1} more',
+  };
   final leading = info.closures.firstOrNull ??
       info.landUse.firstWhereOrNull((feature) => feature.layerId != 'wmu');
   if (leading == null) {
-    return SpotSummary('Nothing on record here', detail: unit);
+    return SpotSummary('Nothing on record here', detail: unit, access: access);
   }
   final verdict = huntingVerdict(leading.huntingAllowed, leading.basis);
   final cautious = verdictSoundsPermissive(verdict) ? null : verdict;
@@ -72,6 +87,7 @@ SpotSummary spotSummary(LandInfo info, Map<String, LoadedLayer> layers) {
     statusColour: cautious?.$2,
     closed: leading.huntingAllowed == false,
     detail: unit,
+    access: access,
   );
 }
 
@@ -172,6 +188,25 @@ class SpotCard extends StatelessWidget {
                     color: summary.statusColour,
                     fontWeight: FontWeight.w600,
                   ),
+                ),
+              ),
+            if (summary.access case final access?)
+              Padding(
+                padding: const EdgeInsets.only(left: 2, right: 8, bottom: 2),
+                child: Row(
+                  children: [
+                    Icon(Icons.phishing, size: 18, color: onContainer),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        access,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium
+                            ?.copyWith(color: onContainer),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             // Long-pressable rather than a fourth button: copying a coordinate is

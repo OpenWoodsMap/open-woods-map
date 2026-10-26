@@ -121,6 +121,8 @@ def rebuild_on(*, skip_clupa_download: bool) -> None:
     run("fetch_defence_land_on.py")
     # Context for the Far North, where the policy atlas runs out
     run("fetch_land_use_plan_on.py")
+    # Boat launches and shore access, the first layer that is not about land
+    run("fetch_fishing_access_on.py")
     download_clupapro(force=not skip_clupa_download)
     run("fetch_unpatented_on.py")
     # Build-time only, and nothing from it ships: Ontario's tenure record covers

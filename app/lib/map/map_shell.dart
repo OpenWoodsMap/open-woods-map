@@ -2916,6 +2916,21 @@ class _MapShellState extends State<MapShell> {
     );
   }
 
+  /// The square a tap at [point] is allowed to land in, [ownHitSlop] either
+  /// side. Screen points are physical pixels on Android and points on iOS; see
+  /// _keepPinClearOfCard.
+  Rect _tapBox(math.Point<double> point) {
+    final slop = ownHitSlop *
+        (defaultTargetPlatform == TargetPlatform.android
+            ? MediaQuery.devicePixelRatioOf(context)
+            : 1.0);
+    return Rect.fromCenter(
+      center: Offset(point.x, point.y),
+      width: slop * 2,
+      height: slop * 2,
+    );
+  }
+
   /// The user's own waypoints and tracks near [point], best first, or empty
   /// for bare ground. [rankOwnHits] decides the order.
   ///
@@ -2926,17 +2941,7 @@ class _MapShellState extends State<MapShell> {
     math.Point<double> point,
     LatLng coordinates,
   ) async {
-    // Screen points are physical pixels on Android and points on iOS; see
-    // _keepPinClearOfCard.
-    final slop = ownHitSlop *
-        (defaultTargetPlatform == TargetPlatform.android
-            ? MediaQuery.devicePixelRatioOf(context)
-            : 1.0);
-    final box = Rect.fromCenter(
-      center: Offset(point.x, point.y),
-      width: slop * 2,
-      height: slop * 2,
-    );
+    final box = _tapBox(point);
     Future<List<String>> idsIn(List<String> layerIds) async {
       final ids = <String>[];
       for (final layerId in layerIds) {
@@ -2994,13 +2999,18 @@ class _MapShellState extends State<MapShell> {
   ) async {
     final hits = <LandFeature>[];
     for (final layerId in _overlays.identifiableLayerIds) {
+      final style = [_overlays.hitLayerId(layerId)];
       final List<dynamic> found;
       try {
-        found = await map.queryRenderedFeatures(
-          point,
-          [_overlays.fillLayerId(layerId)],
-          null,
-        );
+        // A dot is a few pixels across and a fingertip is not, so a point layer
+        // is asked about the same box the user's own waypoints are.
+        found = OverlayController.isPointLayer(layerId)
+            ? await map.queryRenderedFeaturesInRect(
+                _tapBox(point),
+                style,
+                null,
+              )
+            : await map.queryRenderedFeatures(point, style, null);
       } catch (_) {
         // A tap can race a style reload; the pin still drops and the next
         // tap resolves normally.

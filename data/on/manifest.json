@@ -1,7 +1,7 @@
 {
   "id": "on",
   "name": "Ontario",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "crs": "EPSG:4326",
   "license": "OGL-Ontario",
   "license_url": "https://www.ontario.ca/page/open-government-licence-ontario",
@@ -163,6 +163,17 @@
       "crs": "EPSG:4326",
       "coverage": "Ontario lower/single-tier municipalities (full)",
       "boundary_accuracy": "mapped"
+    },
+    {
+      "id": "fishing_access",
+      "label": "Fishing access (launches & shore)",
+      "path": "overlays/fishing_access.geojson",
+      "format": "geojson",
+      "feature_count": 2427,
+      "crs": "EPSG:4326",
+      "coverage": "Boat launches, docks and piers, and shore access sites from the provincial Fishing Access Point inventory, limited to the sites the province marks for public display",
+      "boundary_accuracy": "mapped",
+      "note": "Where the water starts, not whether you may fish it. Of the 3,731 sites in the inventory, 1,304 are marked by the province as not to be shown in mapping applications, and are left out. Parking, fees and surface are shown only where the province recorded them, which for most sites it did not."
     }
   ],
   "gazetteer": {

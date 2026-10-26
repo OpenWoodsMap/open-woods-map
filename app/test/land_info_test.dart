@@ -24,6 +24,7 @@ void main() {
       'sunday_gun': 'has its own Sunday gun section',
       'municipalities': 'resolves the local government line',
       'land_use_plan': 'answers "the atlas never reached here"',
+      'fishing_access': 'has its own fishing access section',
     };
 
     test('every drawn layer is either land use or deliberately elsewhere', () {

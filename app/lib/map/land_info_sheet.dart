@@ -7,6 +7,7 @@ import '../data/province_loader.dart';
 import '../data/seasons.dart';
 import '../ui/messages.dart';
 import 'ask_ai.dart';
+import 'fishing_access.dart';
 import 'land_info.dart';
 import 'policy_markdown.dart';
 import 'seasons_tab.dart';
@@ -225,6 +226,16 @@ class _LandTab extends StatelessWidget {
             ],
           ],
         ),
+        // Straight after the location, because a tap on a launch was aimed at
+        // the launch: the land questions below still apply to the shore around
+        // it and are answered as usual.
+        if (info.fishingAccess.isNotEmpty) ...[
+          const Divider(),
+          _FishingAccess(
+            features: info.fishingAccess,
+            layer: layers['fishing_access'],
+          ),
+        ],
         // Only Ontario packs carry the schedule this is built from; without the
         // layer the app has nothing to say and says nothing.
         if (layers['sunday_gun'] case final sundayLayer?) ...[
@@ -385,6 +396,80 @@ Widget _line(String label, String value) => Padding(
         ],
       ),
     );
+
+class _FishingAccess extends StatelessWidget {
+  const _FishingAccess({required this.features, this.layer});
+
+  final List<LandFeature> features;
+  final LoadedLayer? layer;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final small = theme.textTheme.bodySmall?.copyWith(
+      color: Colors.black54,
+      height: 1.35,
+    );
+    final footnotes = [
+      for (final key in ['note', 'unknown_note', 'completeness_note'])
+        if (layer?.metadata[key] case final String text when text.isNotEmpty)
+          text,
+    ];
+    return _Section(
+      title: 'FISHING ACCESS',
+      children: [
+        for (final feature in features) ...[
+          Text(
+            fishingAccessTitle(feature, layer),
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          if (fishingAccessFacts(feature) case final facts
+              when facts.isNotEmpty)
+            Text(facts.join('  ·  ')),
+          Text(fishingAccessVerified(feature), style: small),
+          if (feature.properties['comment'] case final String comment
+              when comment.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(comment),
+          ],
+          if (fishingAccessInfoUrl(feature) case final url?)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                onPressed: () => _openSite(context, url),
+                icon: const Icon(Icons.open_in_new, size: 16),
+                label: const Text('Site’s own page'),
+              ),
+            ),
+          const SizedBox(height: 10),
+        ],
+        for (final note in footnotes) ...[
+          Text(note, style: small),
+          const SizedBox(height: 4),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _openSite(BuildContext context, Uri url) async {
+    var launched = false;
+    try {
+      launched = await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      launched = false;
+    }
+    if (launched || !context.mounted) return;
+    showMessage(
+      context,
+      'Could not open the page. $url',
+      behavior: SnackBarBehavior.floating,
+    );
+  }
+}
 
 class _Section extends StatelessWidget {
   const _Section({required this.title, required this.children});

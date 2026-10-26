@@ -29,6 +29,7 @@ refuses to publish.
 | Far North & community land use plans | [Land Use Plan Area, MNR](https://www.ontario.ca/page/land-use-planning-process-far-north) (LIO) | The Far North boundary plus 4 approved community plans (3.0M ha) via `fetch_land_use_plan_on.py`. Context, not tenure — see below |
 | Geographic townships | LIO Geographic Township Improved | `fetch_townships_on.py`. A build input, not shipped: `build_sunday_gun_on.py` resolves the schedule's "Geographic Townships of" entries against it. Nothing can draw it, so it is not in the manifest and does not download |
 | Municipalities | LIO MUNICLOW | Lower/single-tier bylaw jurisdiction |
+| Fishing access | [Fishing Access Point](https://geohub.lio.gov.on.ca/datasets/lio::fishing-access-point) (LIO, [data description](https://www.publicdocs.mnr.gov.on.ca/mirb/Fishing%20Access%20Point%20-%20Data%20Description.pdf)) | 2,427 of the inventory's 3,731 sites via `fetch_fishing_access_on.py`: 2,207 boat launches, 53 docks or piers, 167 shore access sites. The first layer that is points and not land. Sites the province marks not to be mapped are left out — see below |
 
 **License:** Ontario [Open Government Licence](https://www.ontario.ca/page/open-government-licence-ontario),
 except the two CPCAD-derived layers, which are [OGL–Canada](https://open.canada.ca/en/open-government-licence-canada).
@@ -403,6 +404,34 @@ not in `unmatched_entries`.
 Because only the permitted side is drawn, the absence of a polygon south of the
 rivers is a prohibition, not a gap. North of the rivers, the north-of-divide
 polygon answers the question that previously required a hedge.
+
+### Fishing access points are shown only where the province asks for them to be
+
+The inventory carries a `VISIBILITY_IND` flag, which the
+[data description](https://www.publicdocs.mnr.gov.on.ca/mirb/Fishing%20Access%20Point%20-%20Data%20Description.pdf)
+defines as whether the site "should be made visible through mapping applications
+or data distribution". 1,304 sites are marked No. The open-data service returns
+them anyway, and at least one other free map draws them, but the custodian has
+said not to map them, so the pack carries only the 2,427 marked Yes. The fetch
+filters on the flag and then checks it again on every record, so a service that
+ignored the filter would not put hidden sites in the pack.
+
+Most of what the inventory can say about a site, it does not: parking is
+Unknown for 2,377 sites, fees for 2,842, ramp surface for 2,884, accessibility
+for 3,359. Unknown is dropped rather than carried, and the card prints only what
+was recorded plus one line saying the rest was not. Only 579 sites carry a date
+anyone last confirmed they exist; the card shows it, or says there is none.
+
+3,202 comments are the record's own cross-reference into another provincial
+table (`RECREATION_POINT.OGF_ID = …`) and are not carried. Photo links point
+into a ministry network share and are not carried either.
+
+A tap resolves the layer against a box rather than the tapped pixel, the same
+box the user's own waypoints use, because a dot is a few pixels across. The
+layer is deliberately not flagged `coverage_incomplete`, although it is: that
+flag prints its caveat on every tap the layer has nothing under, which for a
+layer of points is nearly every tap on the map. The caveat is shown with the
+site instead.
 
 ### Crown game preserves override tenure
 

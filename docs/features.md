@@ -50,6 +50,14 @@ each feature does, and where it stops.
   permitted: a yes is only honest beside the regulation it comes from
 - **Seasons:** every species with a published WMU season table, split into
   open now / upcoming / closed, filterable by game group and residency
+- **Fishing access (Ontario):** the 2,427 boat launches, docks and shore access
+  sites the province publishes for the public, drawn as dots. Tapping one adds
+  it to the card, with parking, fees, ramp surface, accessibility and who owns
+  it wherever the province recorded them, and when someone last confirmed it on
+  a visit. Most sites leave most of that unrecorded, and the card says so
+  rather than implying no. A site says where the water starts, not whether you
+  may fish it: seasons, sanctuaries and limits are in the Ontario Fishing
+  Regulations Summary, which the app does not yet carry
 
 ## Map tools
 
