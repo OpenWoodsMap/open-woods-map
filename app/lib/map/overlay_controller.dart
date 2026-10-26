@@ -316,7 +316,11 @@ class OverlayController extends ChangeNotifier {
           14,
           7.0,
         ],
-        circleOpacity: visible ? 0.95 : 0.0,
+        // Not zero when hidden: native MapLibre gives a circle layer with no
+        // opacity at all no render pass, and a layer without one is skipped by
+        // feature queries, so a hidden launch would answer "nothing on record".
+        // One percent of a dot this size is not something an eye can find.
+        circleOpacity: visible ? 0.95 : 0.01,
         circleStrokeColor: '#FFFFFF',
         circleStrokeWidth: style.lineWidth,
         circleStrokeOpacity: visible ? 0.95 : 0.0,
