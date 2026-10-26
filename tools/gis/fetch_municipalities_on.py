@@ -71,13 +71,20 @@ def _has_geometry(feature: dict) -> bool:
 
 
 def fetch_all() -> list[dict]:
-    features: list[dict] = []
+    # A short page is not the end of the layer: the service cuts a page short
+    # when its geometry is heavy, and stopping there once dropped 33 of 685
+    # municipalities from a rebuild. So the count is asked for up front, pages
+    # are ordered so they cannot overlap or skip, and anything short of the
+    # count fails the run rather than shipping a map with holes in it.
+    expected = int(_query({"where": "1=1", "returnCountOnly": "true", "f": "json"})["count"])
+    by_id: dict[int, dict] = {}
     offset = 0
-    while True:
+    while offset < expected:
         page = _query(
             {
                 "where": "1=1",
                 "outFields": OUT_FIELDS,
+                "orderByFields": "OGF_ID",
                 "returnGeometry": "true",
                 "outSR": "4326",
                 "f": "geojson",
@@ -87,11 +94,17 @@ def fetch_all() -> list[dict]:
             }
         )
         batch = page.get("features") or []
-        features.extend(batch)
-        print(f"fetched {len(features)}", flush=True)
-        if len(batch) < PAGE_SIZE:
+        if not batch:
             break
-        offset += PAGE_SIZE
+        for feature in batch:
+            by_id[int(feature["properties"]["OGF_ID"])] = feature
+        offset += len(batch)
+        print(f"fetched {len(by_id)} of {expected}", flush=True)
+    features = list(by_id.values())
+    if len(features) != expected:
+        raise SystemExit(
+            f"Fetched {len(features)} municipalities but the layer has {expected}"
+        )
 
     missing = [f for f in features if not _has_geometry(f)]
     if missing:
@@ -102,8 +115,8 @@ def fetch_all() -> list[dict]:
             identifier = (feature.get("properties") or {}).get("OGF_ID")
             if identifier is None:
                 continue
-            page = None
-            for attempt in range(3):
+            attempts = 5
+            for attempt in range(attempts):
                 try:
                     page = _query(
                         {
@@ -114,20 +127,26 @@ def fetch_all() -> list[dict]:
                             "f": "geojson",
                         }
                     )
-                    break
                 except Exception as error:  # noqa: BLE001
-                    if attempt == 2:
-                        print(f"  OGF_ID {identifier}: {error}", file=sys.stderr)
-                    else:
-                        time.sleep(2 * (attempt + 1))
-            if page is None:
-                continue
-            for candidate in page.get("features") or []:
-                if _has_geometry(candidate):
-                    feature["geometry"] = candidate["geometry"]
+                    print(f"  OGF_ID {identifier}: {error}", file=sys.stderr)
+                    page = {}
+                usable = [c for c in page.get("features") or [] if _has_geometry(c)]
+                if usable:
+                    feature["geometry"] = usable[0]["geometry"]
                     recovered += 1
                     break
+                if attempt < attempts - 1:
+                    time.sleep(5 * (attempt + 1))
         print(f"  recovered {recovered}/{len(missing)}", flush=True)
+        # Each one is a bylaw jurisdiction, and the Sunday gun layer is joined
+        # onto them, so a silent gap is a wrong answer and not a cosmetic one.
+        lost = [
+            (f.get("properties") or {}).get("MUNICIPAL_NAME", "?")
+            for f in missing
+            if not _has_geometry(f)
+        ]
+        if lost:
+            raise SystemExit(f"No usable boundary for: {', '.join(lost)}")
     return features
 
 
