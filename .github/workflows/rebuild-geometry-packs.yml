@@ -89,6 +89,17 @@ jobs:
           restore-keys: |
             gis-downloads-${{ runner.os }}-
 
+      # build_pack.py merges into an existing index, so a run that rebuilds one
+      # province keeps the other's entry. Without the published index to merge
+      # into, publishing would drop that province from what phones can see.
+      - name: Fetch published pack index
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p packs
+          gh release download packs-latest -p packs.json -D packs \
+            || echo "No published packs.json yet; starting a new index."
+
       - name: Rebuild geometry
         env:
           PYTHONUNBUFFERED: "1"
@@ -127,6 +138,9 @@ jobs:
             echo "No pack zips found under packs/" >&2
             exit 1
           fi
+          # Phones compare their installed pack with this index, so a zip
+          # published without it reads as "update available" forever.
+          FILES+=(packs/packs.json)
           NOTES="$(printf '%s\n' \
             "Automated geometry overlay packs (seasons/policies unchanged)." \
             "" \
