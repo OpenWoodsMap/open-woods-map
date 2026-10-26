@@ -5,10 +5,10 @@
 /// is CC BY 4.0, so the attribution in [openMeteoAttribution] has to stay
 /// visible wherever weather is shown.
 ///
-/// All timestamps are wall-clock at the queried point, not at the device. The
-/// API is asked for `timezone=auto` and returns naive local strings; [now] is
-/// built the same way from [utcOffset] so comparisons stay coherent even when
-/// the user is in a different timezone than the pin.
+/// All timestamps are on the phone's clock, the same as the legal light worked
+/// out on the phone in `sun.dart`, so one screen never mixes two clocks. Only
+/// the calendar dates of [DayForecast.date] are the point's own. The two only
+/// differ when someone plans across a time zone line.
 library;
 
 import 'dart:convert';
@@ -40,7 +40,7 @@ class HourConditions {
     required this.weatherCode,
   });
 
-  /// Wall-clock time at the queried point.
+  /// On the phone's clock.
   final DateTime time;
   final double temperature;
   final double windSpeed;
@@ -104,8 +104,7 @@ class WeatherReport {
   final List<DayForecast> daily;
   final DateTime fetchedAt;
 
-  /// Wall-clock "now" at the queried point.
-  DateTime get now => DateTime.now().toUtc().add(utcOffset);
+  DateTime get now => DateTime.now();
 
   DayForecast? get today {
     final today = DateTime(now.year, now.month, now.day);
@@ -213,13 +212,32 @@ double _double(Object? value) =>
 int _int(Object? value) =>
     value is num ? value.round() : int.tryParse('$value') ?? 0;
 
+DateTime _phoneClock(DateTime utc) => utc.toLocal();
+
 /// Split out from the fetch so the parsing is testable without a network call.
-WeatherReport parseWeather(Map<String, dynamic> json) {
+///
+/// [clock] turns a UTC instant into the time shown. The phone's own unless a
+/// test needs one that does not depend on where it runs.
+WeatherReport parseWeather(
+  Map<String, dynamic> json, {
+  DateTime Function(DateTime utc) clock = _phoneClock,
+}) {
   final current = json['current'] as Map<String, dynamic>?;
   final hourly = json['hourly'] as Map<String, dynamic>?;
   final daily = json['daily'] as Map<String, dynamic>?;
   if (current == null || hourly == null || daily == null) {
     throw const WeatherUnavailable('Weather response was incomplete.');
+  }
+
+  // Open-Meteo's `timezone=auto` writes every timestamp at the offset in force
+  // when it answered, even for days past a change of clocks: asked in late
+  // October, it gives the first Sunday of November's sunrise an hour late.
+  // Reading each one back as an instant and showing it on the phone's clock is
+  // right on both sides of the change.
+  final offset = Duration(seconds: _int(json['utc_offset_seconds']));
+  DateTime? instant(Object? text) {
+    final naive = DateTime.tryParse('${text}Z');
+    return naive == null ? null : clock(naive.subtract(offset));
   }
 
   final times = (hourly['time'] as List<dynamic>? ?? const []);
@@ -237,7 +255,7 @@ WeatherReport parseWeather(Map<String, dynamic> json) {
 
     hours.add(
       HourConditions(
-        time: DateTime.parse(times[i] as String),
+        time: instant(times[i]) ?? DateTime.parse(times[i] as String),
         temperature: at('temperature_2m'),
         windSpeed: at('wind_speed_10m'),
         windDirection: atInt('wind_direction_10m'),
@@ -267,7 +285,7 @@ WeatherReport parseWeather(Map<String, dynamic> json) {
     DateTime atTime(String field, DateTime fallback) {
       final list = daily[field] as List<dynamic>?;
       if (list == null || i >= list.length) return fallback;
-      return DateTime.tryParse('${list[i]}') ?? fallback;
+      return instant(list[i]) ?? fallback;
     }
 
     final date = DateTime.parse(dayTimes[i] as String);
@@ -290,9 +308,9 @@ WeatherReport parseWeather(Map<String, dynamic> json) {
   return WeatherReport(
     latitude: _double(json['latitude']),
     longitude: _double(json['longitude']),
-    utcOffset: Duration(seconds: _int(json['utc_offset_seconds'])),
+    utcOffset: offset,
     current: HourConditions(
-      time: DateTime.parse(current['time'] as String),
+      time: instant(current['time']) ?? DateTime.parse(current['time'] as String),
       temperature: _double(current['temperature_2m']),
       windSpeed: _double(current['wind_speed_10m']),
       windDirection: _int(current['wind_direction_10m']),

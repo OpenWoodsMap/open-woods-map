@@ -138,7 +138,8 @@ added.*
 
 **🧰 Tools**
 - 📏 Measure a distance
-- 💨 Wind where you are, and a weather tab with legal light times
+- 🌅 Legal light for any date, worked out offline
+- 💨 Wind where you are, and a 7-day weather outlook
 - 📤 Share your location or a spot as text with a map link
 
 The long version, with what each feature does and where it stops, is in

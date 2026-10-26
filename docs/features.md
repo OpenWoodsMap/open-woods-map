@@ -77,11 +77,16 @@ each feature does, and where it stops.
 - **Names on the map:** an optional switch in the map's ⋮ menu that writes
   waypoint and track names beside them, from town scale in. Uses the basemap's
   own font, so it keeps working offline
-- **Weather:** current conditions and wind direction for the tapped point, legal
-  light times, best sits for the day, and a 7-day outlook. Includes an optional
-  deer activity graph — an openly documented heuristic, not a prediction, with
-  the reasons behind every hour shown and moon phase deliberately left out. The
-  only feature that needs a connection
+- **Legal light for any date:** sunrise, sunset and the half hour either side
+  for the tapped point, a year back to three years ahead, worked out on the
+  phone so it needs no connection. Shown on the phone's own clock with the zone
+  named, and good to a minute or two for a flat horizon; a ridge to the east
+  delays the real sunrise and the card says it does not know about hills
+- **Weather:** current conditions and wind direction for the tapped point, best
+  sits for the day, and a 7-day outlook. Includes an optional deer activity
+  graph — an openly documented heuristic, not a prediction, with the reasons
+  behind every hour shown and moon phase deliberately left out. The only
+  feature that needs a connection
 - Opens on your own position, once per launch. If location is off or refused it
   falls back to the province without complaining, and switching basemaps keeps
   the view exactly where you left it

@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../weather/activity.dart';
+import '../weather/sun.dart';
 import '../weather/weather.dart';
 
 const _ink = Color(0xFF1B4332);
@@ -28,6 +29,7 @@ class WeatherTab extends StatefulWidget {
 class _WeatherTabState extends State<WeatherTab> {
   late Future<WeatherReport> _report;
   int _selectedDay = 0;
+  late DateTime _lightDate = _dateOnly(DateTime.now());
   bool _showActivity = true;
 
   @override
@@ -50,126 +52,143 @@ class _WeatherTabState extends State<WeatherTab> {
     await prefs.setBool(_activityPrefKey, value);
   }
 
+  void _setLightDate(DateTime date, [WeatherReport? report]) {
+    setState(() {
+      _lightDate = DateTime(date.year, date.month, date.day);
+      final days = report?.daily ?? const <DayForecast>[];
+      final match = days.indexWhere((day) => day.date == _lightDate);
+      if (match >= 0) _selectedDay = match;
+    });
+  }
+
   @override
   Widget build(BuildContext context) => FutureBuilder<WeatherReport>(
         future: _report,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(32),
-                child: CircularProgressIndicator(),
-              ),
-            );
-          }
-          if (snapshot.hasError) {
-            return Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Icon(Icons.cloud_off, color: Colors.black38),
-                  const SizedBox(height: 10),
-                  Text(
-                    '${snapshot.error}',
-                    style: const TextStyle(height: 1.35),
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton.tonalIcon(
-                    onPressed: () => setState(() {
-                      _report = (widget.service ?? defaultWeatherService)
-                          .fetch(widget.latitude, widget.longitude);
-                    }),
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Try again'),
-                  ),
-                ],
-              ),
-            );
-          }
-          return _body(context, snapshot.requireData);
-        },
+        builder: (context, snapshot) => ListView(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+          children: [
+            _LegalLight(
+              date: _lightDate,
+              latitude: widget.latitude,
+              longitude: widget.longitude,
+              onDate: (date) => _setLightDate(date, snapshot.data),
+            ),
+            const SizedBox(height: 18),
+            if (snapshot.connectionState == ConnectionState.waiting)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (snapshot.hasError)
+              _unavailable('${snapshot.error}')
+            else
+              ..._forecast(context, snapshot.requireData),
+          ],
+        ),
       );
 
-  Widget _body(BuildContext context, WeatherReport report) {
-    if (report.daily.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(24),
-        child: Text('No forecast is available for this point.'),
+  Widget _unavailable(String message) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.cloud_off, color: Colors.black38),
+          const SizedBox(height: 10),
+          Text(message, style: const TextStyle(height: 1.35)),
+          const SizedBox(height: 4),
+          const Text(
+            'Legal light above is worked out on the phone and needs no '
+            'connection.',
+            style: TextStyle(fontSize: 12, color: Colors.black54, height: 1.35),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.tonalIcon(
+            onPressed: () => setState(() {
+              _report = (widget.service ?? defaultWeatherService)
+                  .fetch(widget.latitude, widget.longitude);
+            }),
+            icon: const Icon(Icons.refresh),
+            label: const Text('Try again'),
+          ),
+        ],
       );
+
+  List<Widget> _forecast(BuildContext context, WeatherReport report) {
+    if (report.daily.isEmpty) {
+      return const [Text('No forecast is available for this point.')];
     }
     final index = _selectedDay.clamp(0, report.daily.length - 1);
     final day = report.daily[index];
     final activity = DeerActivity.forDay(report, day);
     final isToday = index == 0;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
-      children: [
-        if (isToday) _CurrentConditions(report: report),
-        if (isToday) const SizedBox(height: 18),
-        _LegalLight(day: day),
-        const SizedBox(height: 18),
-        _BestTimes(windows: activity.windows, isToday: isToday),
-        const SizedBox(height: 18),
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'DEER ACTIVITY',
-                style: TextStyle(
-                  color: _ink,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2,
-                ),
+    return [
+      if (isToday) _CurrentConditions(report: report),
+      if (isToday) const SizedBox(height: 18),
+      _BestTimes(
+        windows: activity.windows,
+        heading: isToday
+            ? 'BEST SITS TODAY'
+            : 'BEST SITS · ${_weekday(day.date).toUpperCase()} '
+                '${day.date.day} ${_monthName(day.date).toUpperCase()}',
+      ),
+      const SizedBox(height: 18),
+      Row(
+        children: [
+          const Expanded(
+            child: Text(
+              'DEER ACTIVITY',
+              style: TextStyle(
+                color: _ink,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1.2,
               ),
             ),
-            Switch(
-              value: _showActivity,
-              onChanged: _setShowActivity,
-            ),
-          ],
-        ),
-        if (_showActivity) ...[
-          _ActivityChart(activity: activity, day: day),
-          const SizedBox(height: 8),
-          const Text(
-            'A rule of thumb, not a forecast. Built from time of day, rut '
-            'timing, temperature against local normal, wind, precipitation and '
-            'pressure change. Tap a bar for the reasons. Moon phase is left out '
-            'on purpose: studies looking for an effect on daily movement mostly '
-            'do not find one.',
-            style: TextStyle(fontSize: 12, color: Colors.black54, height: 1.35),
           ),
-        ] else
-          const Text(
-            'Activity estimate hidden.',
-            style: TextStyle(color: Colors.black54),
+          Switch(
+            value: _showActivity,
+            onChanged: _setShowActivity,
           ),
-        const SizedBox(height: 22),
-        const Text(
-          '7-DAY OUTLOOK',
-          style: TextStyle(
-            color: _ink,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 1.2,
-          ),
-        ),
+        ],
+      ),
+      if (_showActivity) ...[
+        _ActivityChart(activity: activity, day: day),
         const SizedBox(height: 8),
-        ...List.generate(report.daily.length, (i) {
-          final entry = report.daily[i];
-          return _DayRow(
-            day: entry,
-            selected: i == index,
-            isToday: i == 0,
-            onTap: () => setState(() => _selectedDay = i),
-          );
-        }),
-        const SizedBox(height: 18),
-        _Attribution(report: report),
-      ],
-    );
+        const Text(
+          'A rule of thumb, not a forecast. Built from time of day, rut '
+          'timing, temperature against local normal, wind, precipitation and '
+          'pressure change. Tap a bar for the reasons. Moon phase is left out '
+          'on purpose: studies looking for an effect on daily movement mostly '
+          'do not find one.',
+          style: TextStyle(fontSize: 12, color: Colors.black54, height: 1.35),
+        ),
+      ] else
+        const Text(
+          'Activity estimate hidden.',
+          style: TextStyle(color: Colors.black54),
+        ),
+      const SizedBox(height: 22),
+      const Text(
+        '7-DAY OUTLOOK',
+        style: TextStyle(
+          color: _ink,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.2,
+        ),
+      ),
+      const SizedBox(height: 8),
+      ...List.generate(report.daily.length, (i) {
+        final entry = report.daily[i];
+        return _DayRow(
+          day: entry,
+          selected: i == index,
+          isToday: i == 0,
+          onTap: () => _setLightDate(entry.date, report),
+        );
+      }),
+      const SizedBox(height: 18),
+      _Attribution(report: report),
+    ];
   }
 }
 
@@ -309,50 +328,115 @@ class _Metric extends StatelessWidget {
       );
 }
 
+/// Legal light for any date, worked out on the phone so it is there with no
+/// signal and for days past the forecast.
 class _LegalLight extends StatelessWidget {
-  const _LegalLight({required this.day});
+  const _LegalLight({
+    required this.date,
+    required this.latitude,
+    required this.longitude,
+    required this.onDate,
+  });
 
-  final DayForecast day;
+  final DateTime date;
+  final double latitude;
+  final double longitude;
+  final ValueChanged<DateTime> onDate;
+
+  Future<void> _pick(BuildContext context) async {
+    final today = _dateOnly(DateTime.now());
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: date,
+      firstDate: today.subtract(const Duration(days: 366)),
+      lastDate: today.add(const Duration(days: 3 * 366)),
+      helpText: 'Legal light on',
+    );
+    if (picked != null) onDate(picked);
+  }
 
   @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'LEGAL LIGHT',
-            style: TextStyle(
-              color: _ink,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.2,
+  Widget build(BuildContext context) {
+    final sun = sunTimesOn(date, latitude, longitude);
+    final now = DateTime.now();
+    final label = date == _dateOnly(now)
+        ? 'Today'
+        : '${_weekday(date)} ${date.day} ${_monthName(date)}'
+            '${date.year == now.year ? '' : ' ${date.year}'}';
+    String local(DateTime utc) => _hm(utc.toLocal());
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'LEGAL LIGHT',
+                style: TextStyle(
+                  color: _ink,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
+            IconButton(
+              tooltip: 'Day before',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.chevron_left),
+              onPressed: () => onDate(date.subtract(const Duration(days: 1))),
+            ),
+            TextButton.icon(
+              onPressed: () => _pick(context),
+              icon: const Icon(Icons.calendar_today, size: 16),
+              label: Text(label),
+            ),
+            IconButton(
+              tooltip: 'Day after',
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.chevron_right),
+              onPressed: () => onDate(date.add(const Duration(days: 1))),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        if (sun == null)
+          const Text('The sun does not both rise and set here on this date.')
+        else
           Row(
             children: [
-              _Metric('Legal start', _hm(day.legalStart)),
+              _Metric('Legal start', local(sun.legalStart)),
               const SizedBox(width: 18),
-              _Metric('Sunrise', _hm(day.sunrise)),
+              _Metric('Sunrise', local(sun.sunrise)),
               const SizedBox(width: 18),
-              _Metric('Sunset', _hm(day.sunset)),
+              _Metric('Sunset', local(sun.sunset)),
               const SizedBox(width: 18),
-              _Metric('Legal end', _hm(day.legalEnd)),
+              _Metric('Legal end', local(sun.legalEnd)),
             ],
           ),
-          const SizedBox(height: 6),
-          const Text(
-            'Half an hour either side of the sun, the general rule for big '
-            'game. Some species differ — check the regulations for your tag.',
-            style: TextStyle(fontSize: 12, color: Colors.black54, height: 1.35),
+        const SizedBox(height: 6),
+        Text(
+          'Half an hour either side of the sun, the general rule for big '
+          'game. Some species differ — check the regulations for your tag. '
+          'Worked out on this phone for a flat horizon, to within a minute or '
+          'two, on its own clock'
+          '${sun == null ? '' : ' (${sun.sunrise.toLocal().timeZoneName})'}.',
+          style: const TextStyle(
+            fontSize: 12,
+            color: Colors.black54,
+            height: 1.35,
           ),
-        ],
-      );
+        ),
+      ],
+    );
+  }
 }
 
 class _BestTimes extends StatelessWidget {
-  const _BestTimes({required this.windows, required this.isToday});
+  const _BestTimes({required this.windows, required this.heading});
 
   final List<ActivityWindow> windows;
-  final bool isToday;
+  final String heading;
 
   @override
   Widget build(BuildContext context) {
@@ -363,7 +447,7 @@ class _BestTimes extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          isToday ? 'BEST SITS TODAY' : 'BEST SITS',
+          heading,
           style: const TextStyle(
             color: _ink,
             fontWeight: FontWeight.w700,
@@ -650,6 +734,15 @@ Color _bandColor(int score) => switch (score) {
 String _hm(DateTime time) =>
     '${time.hour.toString().padLeft(2, '0')}:'
     '${time.minute.toString().padLeft(2, '0')}';
+
+DateTime _dateOnly(DateTime time) => DateTime(time.year, time.month, time.day);
+
+const _months = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+String _monthName(DateTime date) => _months[date.month - 1];
 
 String _weekday(DateTime date) => switch (date.weekday) {
       DateTime.monday => 'Mon',

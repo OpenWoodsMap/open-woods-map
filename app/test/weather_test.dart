@@ -71,10 +71,39 @@ Map<String, dynamic> payload({
   };
 }
 
+/// The fixtures are written at UTC−4 and read back on a UTC−4 clock, so these
+/// tests mean the same on a laptop in Ontario and on a CI runner in UTC.
+DateTime _fixtureClock(DateTime utc) {
+  final wall = utc.subtract(const Duration(hours: 4));
+  return DateTime(wall.year, wall.month, wall.day, wall.hour, wall.minute);
+}
+
+WeatherReport parse(Map<String, dynamic> json) =>
+    parseWeather(json, clock: _fixtureClock);
+
 void main() {
   group('parseWeather', () {
+    // Open-Meteo, asked in late October, writes November's times at the
+    // daylight offset it answered in. On a clock that has fallen back to
+    // standard time the sun rises an hour earlier than those strings say.
+    test('shows times past a change of clocks at the new offset', () {
+      DateTime eastern(DateTime utc) {
+        final wall = utc.subtract(const Duration(hours: 5));
+        return DateTime(wall.year, wall.month, wall.day, wall.hour, wall.minute);
+      }
+
+      final report = parseWeather(
+        payload(date: '2026-11-02', sunrise: '08:08', sunset: '18:03'),
+        clock: eastern,
+      );
+      final day = report.daily.single;
+      expect((day.sunrise.hour, day.sunrise.minute), (7, 8));
+      expect((day.sunset.hour, day.sunset.minute), (17, 3));
+      expect(report.hourly.first.time, DateTime(2026, 11, 1, 23));
+    });
+
     test('reads current conditions, 24 hours and the daily entry', () {
-      final report = parseWeather(payload(date: '2026-11-15'));
+      final report = parse(payload(date: '2026-11-15'));
 
       expect(report.hourly, hasLength(24));
       expect(report.daily, hasLength(1));
@@ -85,7 +114,7 @@ void main() {
     });
 
     test('derives legal light as a half hour either side of the sun', () {
-      final report = parseWeather(payload(date: '2026-11-15'));
+      final report = parse(payload(date: '2026-11-15'));
       final day = report.daily.single;
 
       expect(day.sunrise.hour, 7);
@@ -97,13 +126,13 @@ void main() {
 
     test('rejects a response missing its blocks', () {
       expect(
-        () => parseWeather({'latitude': 45.0}),
+        () => parse({'latitude': 45.0}),
         throwsA(isA<WeatherUnavailable>()),
       );
     });
 
     test('hoursOn only returns the requested day', () {
-      final report = parseWeather(payload(date: '2026-11-15'));
+      final report = parse(payload(date: '2026-11-15'));
       expect(report.hoursOn(DateTime(2026, 11, 15)), hasLength(24));
       expect(report.hoursOn(DateTime(2026, 11, 16)), isEmpty);
     });
@@ -132,7 +161,7 @@ void main() {
 
   group('DeerActivity', () {
     DeerActivity rate(Map<String, dynamic> json) {
-      final report = parseWeather(json);
+      final report = parse(json);
       return DeerActivity.forDay(report, report.daily.single);
     }
 
@@ -235,7 +264,7 @@ void main() {
 
     test('keeps every suggested window inside legal light', () {
       final activity = rate(payload(date: '2026-11-15'));
-      final day = parseWeather(payload(date: '2026-11-15')).daily.single;
+      final day = parse(payload(date: '2026-11-15')).daily.single;
 
       expect(activity.windows, isNotEmpty);
       for (final window in activity.windows) {
