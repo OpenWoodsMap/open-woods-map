@@ -705,7 +705,7 @@ derived.
 | Hunting zones | — | **Not shipped.** No licence permits redistribution; see below. `fetch_qc_real.py --zones` still builds it if that changes |
 | Parks & protected | TRQ_WMS | National/provincial parks, reserves, refuges |
 | Public hunt territories | TRQ ZECs / exclusive / outfitters | Green overlay proxy until full Crown tenure fabric ships |
-| Municipalities (CSD) | StatsCan 2021 cartographic CSD | `fetch_municipalities_qc.py` (EPSG:3347 → WGS84) |
+| Municipalities | MRNF [Découpages administratifs](https://www.donneesquebec.ca/recherche/dataset/decoupages-administratifs) 1:20 000, `munic_s` | `fetch_municipalities_qc.py`. Municipalities, unorganized territories (including the water-only ones) and reserves; about 1,340 territories, updated monthly |
 | Municipal forests | — | Empty schema; no province-wide open layer yet |
 
 **License:** not one licence, and one of them is unresolved:
@@ -718,7 +718,11 @@ derived.
   `servicescarto.mrnf.gouv.qc.ca/pes/rest/services/Territoire/TRQ_WMS/MapServer`,
   among its own distributions — so the licence attaches to the thing we call, not
   to a dataset that resembles it.
-- **Municipalities** are StatsCan [Open Licence](https://www.statcan.gc.ca/en/reference/licence).
+- **Municipalities** are Attribution (CC-BY 4.0), as the Données Québec
+  package for the Découpages administratifs states. Until October 2026 they
+  came from Statistics Canada's 2021 census subdivisions; www12.statcan.gc.ca
+  then began answering every scripted request with 403, and the province's
+  own layer is the more current of the two anyway.
 - **Hunting zones (GAGQ) have no licence, and the search for one is finished.**
   The service states only `© Gouvernement du Québec`; it is the Greffe de
   l'arpenteur général locator service, published to help find survey documents

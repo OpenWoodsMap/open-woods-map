@@ -43,7 +43,9 @@ both, because the field you want is often not named what it means — CLUPA's
 Federal sources used here: CPCAD (ECCC) for protected areas, the Canada Lands
 Survey System (NRCan) for reserves, DFRP (Treasury Board) for defence property.
 Where a province does not publish a usable municipal fabric, StatCan's census
-subdivision boundary files do (this is what Quebec uses).
+subdivision boundary files do. Quebec used them until www12.statcan.gc.ca
+started refusing scripted downloads, and now uses the province's own
+Découpages administratifs, which is the better source where it exists.
 
 ## Reading the law without a paywall
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Fetch Quebec municipalities from Statistics Canada 2021 CSD boundaries.
+"""Fetch Quebec municipalities from the provincial Découpages administratifs.
 
-Downloads the Cartographic Boundary File ZIP, filters PRUID=24, and
-reprojects NAD83 / Statistics Canada Lambert (EPSG:3347) → WGS84.
-Requires: pip install pyshp pyproj shapely
+Downloads the MRNF 1:20 000 SDA shapefile archive, reads the municipal
+territories (munic_s), and writes them as WGS84 GeoJSON.
+Requires: pip install pyshp shapely
 """
 
 from __future__ import annotations
@@ -15,9 +15,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-from pyproj import Transformer
 from shapely.geometry import mapping, shape
-from shapely.ops import transform
 from shapely.validation import make_valid
 
 try:
@@ -27,16 +25,25 @@ except ImportError as exc:  # pragma: no cover
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "data/qc/overlays/municipalities.geojson"
-# 2021 Census Cartographic Boundary File — Census Subdivisions
+# Statistics Canada's census subdivisions were the source until www12.statcan
+# began refusing every scripted request. This is the province's own layer,
+# which the census subdivisions are themselves drawn from.
 ZIP_URL = (
-    "https://www12.statcan.gc.ca/census-recensement/2021/geo/sip-pis/"
-    "boundary-limites/files-fichiers/lcsd000b21a_e.zip"
+    "https://diffusion.mern.gouv.qc.ca/diffusion/RGQ/Vectoriel/Theme/Local/"
+    "SDA_20k/SHP/SDA.shp.zip"
 )
-SRC_CRS = "EPSG:3347"  # NAD83 / Statistics Canada Lambert
+DATASET_URL = "https://www.donneesquebec.ca/recherche/dataset/decoupages-administratifs"
+LAYER = "munic_s"
+# Geographic NAD83. Left untransformed: it sits within about a metre of WGS84
+# here, well under the simplification applied below.
+SRC_CRS = "EPSG:4269"
+# A complete archive holds about 1,340 territories. Far fewer means a cut-off
+# download or a changed archive, and either would leave towns without bylaws.
+MIN_FEATURES = 1200
 
 
 def download_zip(dest: Path) -> Path:
-    if dest.exists() and dest.stat().st_size > 1_000_000:
+    if dest.exists() and dest.stat().st_size > 50_000_000:
         print(f"Using cached {dest}", flush=True)
         return dest
     print(f"Downloading {ZIP_URL} …", flush=True)
@@ -47,82 +54,64 @@ def download_zip(dest: Path) -> Path:
     return dest
 
 
-def find_shp(extract_dir: Path) -> Path:
-    matches = list(extract_dir.rglob("*.shp"))
-    if not matches:
-        raise FileNotFoundError(f"No .shp under {extract_dir}")
-    return matches[0]
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=OUT)
     parser.add_argument(
         "--zip",
         type=Path,
-        default=Path(__file__).resolve().parent / "_tmp_statcan" / "lcsd000b21a_e.zip",
+        default=Path(__file__).resolve().parent / "_tmp_sda" / "SDA.shp.zip",
     )
     parser.add_argument("--simplify", type=float, default=0.002)
     args = parser.parse_args()
 
     args.zip.parent.mkdir(parents=True, exist_ok=True)
     download_zip(args.zip)
-    transformer = Transformer.from_crs(SRC_CRS, "EPSG:4326", always_xy=True)
 
+    out = []
+    version = ""
     with tempfile.TemporaryDirectory() as tmp:
         with zipfile.ZipFile(args.zip) as archive:
-            archive.extractall(tmp)
-        shp = find_shp(Path(tmp))
-        print(f"Reading {shp.name} ({SRC_CRS} -> EPSG:4326) ...", flush=True)
-        reader = shapefile.Reader(str(shp), encoding="latin-1")
-        fields = [f[0] for f in reader.fields[1:]]
-        out = []
+            members = [n for n in archive.namelist() if Path(n).stem == LAYER]
+            if not any(n.endswith(".shp") for n in members):
+                raise SystemExit(f"{args.zip.name} has no {LAYER}.shp")
+            archive.extractall(tmp, members)
+        print(f"Reading {LAYER}.shp ...", flush=True)
+        reader = shapefile.Reader(str(Path(tmp) / LAYER), encoding="utf-8")
         try:
-            for i, sr in enumerate(reader.iterShapeRecords(), 1):
-                attrs = dict(zip(fields, sr.record, strict=False))
-                pruid = str(attrs.get("PRUID") or attrs.get("pruid") or "")
-                if pruid != "24":
+            for sr in reader.iterShapeRecords():
+                attrs = sr.record.as_dict()
+                name = str(attrs.get("MUS_NM_MUN") or "").strip()
+                code = str(attrs.get("MUS_CO_GEO") or "").strip()
+                version = version or str(attrs.get("MUS_CO_VER") or "").strip()
+                if not name or not code:
+                    raise SystemExit(f"Territory without a name or code: {attrs}")
+                g = shape(sr.shape.__geo_interface__)
+                if not g.is_valid:
+                    g = make_valid(g)
+                if args.simplify > 0:
+                    g = g.simplify(args.simplify, preserve_topology=True)
+                if g.is_empty or g.geom_type == "GeometryCollection":
+                    print(f"skip {name}: no usable geometry", flush=True)
                     continue
-                name = str(
-                    attrs.get("CSDNAME")
-                    or attrs.get("csdname")
-                    or f"CSD {i}"
-                ).strip()
-                ctype = str(
-                    attrs.get("CSDTYPE") or attrs.get("csdtype") or ""
-                ).strip()
-                try:
-                    geom = sr.shape.__geo_interface__
-                    g = shape(geom)
-                    if not g.is_valid:
-                        g = make_valid(g)
-                    g = transform(transformer.transform, g)
-                    if args.simplify > 0:
-                        g = g.simplify(args.simplify, preserve_topology=True)
-                    if g.is_empty or g.geom_type == "GeometryCollection":
-                        continue
-                    out.append(
-                        {
-                            "type": "Feature",
-                            "properties": {
-                                "id": f"qc-csd-{attrs.get('CSDUID') or i}",
-                                "name": name,
-                                "type": ctype or "municipality",
-                                "province": "QC",
-                                "source": (
-                                    "Statistics Canada 2021 CSD cartographic "
-                                    "boundaries"
-                                ),
-                            },
-                            "geometry": mapping(g),
-                        }
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    print(f"skip {name}: {exc}")
-                if len(out) % 100 == 0 and out:
-                    print(f"  kept {len(out)} …", flush=True)
+                out.append(
+                    {
+                        "type": "Feature",
+                        "properties": {
+                            "id": f"qc-mun-{code}",
+                            "name": name,
+                            "type": str(attrs.get("MUS_CO_DES") or "").strip(),
+                            "designation": str(attrs.get("MUS_DE_IND") or "").strip(),
+                            "province": "QC",
+                        },
+                        "geometry": mapping(g),
+                    }
+                )
         finally:
             reader.close()
+
+    if len(out) < MIN_FEATURES:
+        raise SystemExit(f"Only {len(out)} territories, expected at least {MIN_FEATURES}")
 
     payload = {
         "type": "FeatureCollection",
@@ -130,17 +119,24 @@ def main() -> int:
             "crs": "EPSG:4326",
             "layer": "municipalities",
             "feature_count": len(out),
-            "coverage": "Quebec census subdivisions (2021)",
-            "license": "Statistics Canada Open Licence",
-            "license_url": "https://www.statcan.gc.ca/en/reference/licence",
-            "source": ZIP_URL,
+            "coverage": (
+                "Quebec municipalities, unorganized territories and reserves "
+                f"(Découpages administratifs 1:20 000, {version or 'version unknown'})"
+            ),
+            "source": DATASET_URL,
+            "source_file": ZIP_URL,
+            "attribution": "Ministère des Ressources naturelles et des Forêts du Québec",
+            "license": "CC-BY 4.0",
+            "license_url": "https://creativecommons.org/licenses/by/4.0/",
             "source_crs": SRC_CRS,
             "simplify_degrees": args.simplify,
         },
         "features": out,
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+    args.out.write_text(
+        json.dumps(payload, separators=(",", ":"), ensure_ascii=False), encoding="utf-8"
+    )
     print(f"Wrote {len(out)} -> {args.out} ({args.out.stat().st_size/1e6:.2f} MB)")
     return 0
 

@@ -83,7 +83,6 @@ jobs:
         with:
           path: |
             tools/gis/_tmp_clupapro
-            tools/gis/_tmp_statcan
             tools/gis/_tmp_patent
           key: gis-downloads-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |

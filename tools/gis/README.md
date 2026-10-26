@@ -102,7 +102,7 @@ python scrape_seasons_on.py --year 2026
 
 # Quebec
 python fetch_qc_real.py               # WMU + parks + ZEC/outfitter territories
-python fetch_municipalities_qc.py     # StatsCan CSD (reprojects EPSG:3347 → WGS84)
+python fetch_municipalities_qc.py     # MRNF Découpages administratifs (munic_s)
 ```
 
 Then: `python build_pack.py on qc` and `..\..\scripts\sync_assets.ps1`.
