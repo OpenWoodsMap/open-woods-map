@@ -4,6 +4,7 @@ import 'package:maplibre_gl/maplibre_gl.dart';
 import '../backup/backup_page.dart';
 import '../backup/backup_record.dart';
 import '../backup/snapshot_store.dart';
+import '../map/custom_map.dart';
 import '../tracks/track_math.dart';
 import '../settings/coordinate_format.dart';
 import '../settings/visibility_settings.dart';
@@ -11,6 +12,7 @@ import '../ui/messages.dart';
 import 'bulk_edit.dart';
 import 'icon_match.dart';
 import 'import_export.dart';
+import 'map_area.dart';
 import 'tag_style.dart';
 import 'undo.dart';
 import 'waypoint_colour.dart';
@@ -44,11 +46,21 @@ class WaypointsPage extends StatefulWidget {
     required this.store,
     required this.suggestedLocation,
     required this.visibility,
+    this.mapView,
+    this.startInMapView = false,
   });
 
   final WaypointStore store;
   final LatLng suggestedLocation;
   final VisibilitySettings visibility;
+
+  /// What the map had on screen when this page opened, or null if it had not
+  /// drawn yet. Fixed for the life of the page: the map does not move while the
+  /// list covers it.
+  final GeoBox? mapView;
+
+  /// Opens already narrowed to [mapView], for the map's "in this view" entry.
+  final bool startInMapView;
 
   @override
   State<WaypointsPage> createState() => _WaypointsPageState();
@@ -85,6 +97,19 @@ class _WaypointsPageState extends State<WaypointsPage> {
   /// Whether the list is narrowed to what is kept off the map, by its own eye
   /// or by a tag's. One question, because both look the same from the map.
   var _onlyHidden = false;
+
+  /// Whether the list is narrowed to what the map was drawing on screen.
+  ///
+  /// Drawn, not merely located there: something hidden from the map was not
+  /// in the view the user looked at, and tagging "everything from that trip"
+  /// should not reach into what they had put out of sight. That also makes it
+  /// the opposite of [_onlyHidden], so picking one lets go of the other.
+  late var _inMapView = widget.startInMapView && widget.mapView != null;
+
+  /// Whether the list is narrowed to items carrying no tag at all, which is
+  /// where an import or a day's marks land. Picking it lets go of any tags
+  /// picked, and picking a tag lets go of it, since nothing can be both.
+  var _onlyUntagged = false;
 
   /// What is being searched for, trimmed and lowered once here rather than on
   /// every comparison. Empty means no search.
@@ -137,15 +162,26 @@ class _WaypointsPageState extends State<WaypointsPage> {
   /// how the list is sectioned. A search alone hides rows without changing what
   /// the sections are.
   bool get _filtered =>
-      _selected.isNotEmpty || _query.isNotEmpty || _onlyHidden;
+      _selected.isNotEmpty ||
+      _query.isNotEmpty ||
+      _onlyHidden ||
+      _inMapView ||
+      _onlyUntagged;
 
   bool _matches(Waypoint item) =>
       _matchesQuery(item) &&
       _matchesTags(item) &&
-      (!_onlyHidden || _hiddenOnMap(item));
+      (!_onlyHidden || _hiddenOnMap(item)) &&
+      (!_inMapView || _drawnInMapView(item)) &&
+      (!_onlyUntagged || item.tags.isEmpty);
 
   bool _hiddenOnMap(Waypoint item) =>
       widget.visibility.isHiddenOnMap(item.id, item.tags);
+
+  bool _drawnInMapView(Waypoint item) => switch (widget.mapView) {
+    final box? => !_hiddenOnMap(item) && isInBox(item, box),
+    null => false,
+  };
 
   bool _matchesTags(Waypoint item) {
     if (_selected.isEmpty) return true;
@@ -171,6 +207,8 @@ class _WaypointsPageState extends State<WaypointsPage> {
   void _clearFilters() => setState(() {
     _selected.clear();
     _onlyHidden = false;
+    _inMapView = false;
+    _onlyUntagged = false;
     _query = '';
     _search.clear();
   });
@@ -414,19 +452,9 @@ class _WaypointsPageState extends State<WaypointsPage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              switch ((_query.isNotEmpty, _selected.isNotEmpty)) {
-                (false, false) => 'Nothing is hidden from the map.',
-                (true, true) =>
-                  'Nothing matching "$typed" carries '
-                      '${_matchAll ? 'all of' : 'any of'} $tags'
-                      '${_onlyHidden ? ' and is hidden from the map' : ''}.',
-                (true, false) => _onlyHidden
-                    ? 'Nothing hidden from the map matches "$typed".'
-                    : 'Nothing matches "$typed".',
-                _ =>
-                  'Nothing ${_onlyHidden ? 'hidden from the map ' : ''}'
-                      'carries ${_matchAll ? 'all of' : 'any of'} $tags.',
-              },
+              _inMapView || _onlyUntagged
+                  ? _nothingIs(typed, tags)
+                  : _nothingMatchesSentence(typed, tags),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
@@ -445,6 +473,39 @@ class _WaypointsPageState extends State<WaypointsPage> {
         ),
       ),
     );
+  }
+
+  String _nothingMatchesSentence(String typed, String tags) =>
+      switch ((_query.isNotEmpty, _selected.isNotEmpty)) {
+        (false, false) => 'Nothing is hidden from the map.',
+        (true, true) =>
+          'Nothing matching "$typed" carries '
+              '${_matchAll ? 'all of' : 'any of'} $tags'
+              '${_onlyHidden ? ' and is hidden from the map' : ''}.',
+        (true, false) => _onlyHidden
+            ? 'Nothing hidden from the map matches "$typed".'
+            : 'Nothing matches "$typed".',
+        _ =>
+          'Nothing ${_onlyHidden ? 'hidden from the map ' : ''}'
+              'carries ${_matchAll ? 'all of' : 'any of'} $tags.',
+      };
+
+  /// Every filter in force, named, for when the map view or untagged is one of
+  /// them. Said as a list because these combine in more ways than a sentence per
+  /// combination could keep up with.
+  String _nothingIs(String typed, String tags) {
+    final filters = [
+      if (_inMapView) 'drawn in the map view',
+      if (_onlyHidden) 'hidden from the map',
+      if (_onlyUntagged) 'untagged',
+      if (_selected.isNotEmpty)
+        'carrying ${_matchAll ? 'all of' : 'any of'} $tags',
+      if (_query.isNotEmpty) 'matching "$typed"',
+    ];
+    final joined = filters.length == 1
+        ? filters.single
+        : '${filters.take(filters.length - 1).join(', ')} and ${filters.last}';
+    return 'Nothing is $joined.';
   }
 
   /// How much is in here, said plainly and by kind.
@@ -480,6 +541,8 @@ class _WaypointsPageState extends State<WaypointsPage> {
   Widget _filterBar() {
     final counts = widget.store.tagCounts;
     final hiddenCount = widget.store.items.where(_hiddenOnMap).length;
+    final inViewCount = widget.store.items.where(_drawnInMapView).length;
+    final untaggedCount = widget.store.untaggedCount;
     final all = counts.keys.toList()..sort();
     // A search narrows the chips as well as the list, because "find the tag I
     // want to filter on" is most of what the old row made hard. A tag already
@@ -548,12 +611,39 @@ class _WaypointsPageState extends State<WaypointsPage> {
               // Counts every hidden item, not only those the other filters let
               // through: it is the answer to "what is missing from my map", and
               // a number that shrank with the search would not be.
+              // Counted against everything, like the hidden chip, so the number
+              // says what the map had on screen whatever else is filtering.
+              if (widget.mapView != null && (inViewCount > 0 || _inMapView))
+                FilterChip(
+                  avatar: const Icon(Icons.crop_free, size: 16),
+                  label: Text('In map view $inViewCount'),
+                  tooltip: 'What the map was drawing on screen. A track counts '
+                      'if any part of it was.',
+                  selected: _inMapView,
+                  onSelected: (on) => setState(() {
+                    _inMapView = on;
+                    if (on) _onlyHidden = false;
+                  }),
+                ),
               if (hiddenCount > 0 || _onlyHidden)
                 FilterChip(
                   avatar: const Icon(Icons.visibility_off_outlined, size: 16),
                   label: Text('Hidden from map $hiddenCount'),
                   selected: _onlyHidden,
-                  onSelected: (on) => setState(() => _onlyHidden = on),
+                  onSelected: (on) => setState(() {
+                    _onlyHidden = on;
+                    if (on) _inMapView = false;
+                  }),
+                ),
+              if (untaggedCount > 0 || _onlyUntagged)
+                FilterChip(
+                  avatar: const Icon(Icons.label_off_outlined, size: 16),
+                  label: Text('Untagged $untaggedCount'),
+                  selected: _onlyUntagged,
+                  onSelected: (on) => setState(() {
+                    _onlyUntagged = on;
+                    if (on) _selected.clear();
+                  }),
                 ),
               // Shown whether or not it currently changes anything, because a
               // filter whose rule is invisible until it bites is worse than a
@@ -618,6 +708,7 @@ class _WaypointsPageState extends State<WaypointsPage> {
       onSelected: (on) => setState(() {
         if (on) {
           _selected.add(tag);
+          _onlyUntagged = false;
         } else {
           _selected.remove(tag);
         }
@@ -1109,6 +1200,7 @@ class _WaypointsPageState extends State<WaypointsPage> {
           ? 'Edit the ${describeItems(shown)} shown'
           : 'Edit all ${describeItems(shown)}',
       hints: [_query, ..._selected],
+      knownTags: widget.store.tagCounts,
     );
     if (edit == null || edit.isEmpty || !mounted) return;
     final changed = applyBulkEdit(shown, edit);

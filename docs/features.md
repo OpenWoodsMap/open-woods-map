@@ -105,7 +105,13 @@ each feature does, and where it stops.
 - **Hide from the map** without deleting: per item, per tag, or everything the
   list is showing, with a *Hidden from map* filter to find them again
 - **Bulk edit:** set an icon, a colour or an added tag on everything the search
-  and tag filter are showing, with undo
+  and tag filter are showing, with undo. The tag box offers the tags you
+  already use, so one trip does not end up under two spellings
+- **Waypoints in this view:** opens the list narrowed to what the map is
+  drawing on screen, so a day's marks or someone else's import can be tagged,
+  restyled, exported or cleared as one area. A track counts if any part of it
+  is on screen; anything hidden from the map is left out. An *Untagged* filter
+  sits beside it for the marks you have not sorted yet
 - **Match icons to names:** proposes icons for plain pins from words in their
   names ("North stand", "Trail cam 3", "Truck"), in English and Quebec French.
   Place names such as "Bear Creek" and names that match two icons start

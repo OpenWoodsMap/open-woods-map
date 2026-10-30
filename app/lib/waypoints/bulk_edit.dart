@@ -140,19 +140,45 @@ List<WaypointIcon> iconsMatching(Iterable<String> hints) {
   ].take(4).toList();
 }
 
+/// Tags already in use that fit what has been typed, most used first.
+///
+/// Offered rather than autocompleted. Tagging a whole trip at once is exactly
+/// when "hunt 2026" beside an existing "hunt-2026" splits one trip into two
+/// tags, and the cure is seeing the existing one, not the app picking it.
+/// With nothing typed the most used are offered, since the tag wanted is
+/// usually one already in use.
+List<String> tagSuggestions(Map<String, int> knownTags, String typed) {
+  final wanted = normaliseTags([typed]);
+  final query = wanted.isEmpty ? '' : wanted.single;
+  final ranked = knownTags.entries
+      .where((entry) => entry.key != query && entry.key.contains(query))
+      .toList()
+    ..sort((a, b) {
+      final byUse = b.value.compareTo(a.value);
+      return byUse != 0 ? byUse : a.key.compareTo(b.key);
+    });
+  return [for (final entry in ranked.take(6)) entry.key];
+}
+
 /// Asks what to change about [items]. Null if cancelled or nothing was picked.
 Future<BulkEdit?> showBulkEdit(
   BuildContext context, {
   required List<Waypoint> items,
   required String title,
   required Iterable<String> hints,
+  Map<String, int> knownTags = const {},
 }) => showModalBottomSheet<BulkEdit>(
   context: context,
   isScrollControlled: true,
   showDragHandle: true,
   builder: (context) => FractionallySizedBox(
     heightFactor: 0.9,
-    child: _BulkEditSheet(items: items, title: title, hints: hints.toList()),
+    child: _BulkEditSheet(
+      items: items,
+      title: title,
+      hints: hints.toList(),
+      knownTags: knownTags,
+    ),
   ),
 );
 
@@ -161,11 +187,13 @@ class _BulkEditSheet extends StatefulWidget {
     required this.items,
     required this.title,
     required this.hints,
+    required this.knownTags,
   });
 
   final List<Waypoint> items;
   final String title;
   final List<String> hints;
+  final Map<String, int> knownTags;
 
   @override
   State<_BulkEditSheet> createState() => _BulkEditSheetState();
@@ -337,6 +365,28 @@ class _BulkEditSheetState extends State<_BulkEditSheet> {
                   onChanged: (_) => setState(() {}),
                 ),
               ),
+              if (tagSuggestions(widget.knownTags, _tag.text)
+                  case final suggested when suggested.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final tag in suggested)
+                        ActionChip(
+                          avatar: const Icon(Icons.label_outline, size: 16),
+                          label: Text(tag),
+                          tooltip: 'Use the existing tag "$tag"',
+                          onPressed: () => setState(() {
+                            _tag.text = tag;
+                            _tag.selection =
+                                TextSelection.collapsed(offset: tag.length);
+                          }),
+                        ),
+                    ],
+                  ),
+                ),
             ],
           ),
         ),

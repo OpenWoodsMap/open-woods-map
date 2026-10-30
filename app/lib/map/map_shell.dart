@@ -659,6 +659,7 @@ class _MapShellState extends State<MapShell> {
               _MapMenuItem.measure => _startMeasuring(),
               _MapMenuItem.wind => _showWind(),
               _MapMenuItem.shareLocation => _shareMyLocation(),
+              _MapMenuItem.inView => _showWaypoints(inView: true),
               _MapMenuItem.names => _toggleNames(),
               _MapMenuItem.offlinePacks => _openOfflinePacks(),
               _MapMenuItem.settings => _openSettings(),
@@ -3092,7 +3093,26 @@ class _MapShellState extends State<MapShell> {
     );
   }
 
-  Future<void> _showWaypoints() async {
+  /// What is on screen, unpadded, or null before the map has drawn.
+  Future<GeoBox?> _screenBox() async {
+    final map = _map;
+    if (map == null) return null;
+    try {
+      final bounds = await map.getVisibleRegion();
+      return GeoBox(
+        north: bounds.northeast.latitude,
+        south: bounds.southwest.latitude,
+        east: bounds.northeast.longitude,
+        west: bounds.southwest.longitude,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _showWaypoints({bool inView = false}) async {
+    final mapView = await _screenBox();
+    if (!mounted) return;
     // A snackbar outlives the route that raised it, so a delete's UNDO from the
     // map card followed the user onto this list. The store is not listenable and
     // the list holds its own copy, so tapping that UNDO here would put the
@@ -3108,6 +3128,8 @@ class _MapShellState extends State<MapShell> {
               store: _waypoints,
               suggestedLocation: _identifiedLocation ?? _camera.target,
               visibility: _visibility,
+              mapView: mapView,
+              startInMapView: inView,
             ),
       ),
     );
@@ -3511,6 +3533,9 @@ enum _MapMenuItem {
   measure(label: 'Measure a distance', icon: Icons.straighten),
   wind(label: 'Wind where I am', icon: Icons.air),
   shareLocation(label: 'Share my location', icon: Icons.share_location),
+  // The list, narrowed to what is on screen, so a day's marks or someone
+  // else's import can be tagged, restyled or cleared as one area.
+  inView(label: 'Waypoints in this view', icon: Icons.crop_free),
   // A switch rather than a tool, but one flipped on for a minute to tell marks
   // apart and off again, so it sits with the things reached in one tap.
   names(label: 'Names on the map', icon: Icons.label_outline),
