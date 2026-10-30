@@ -53,6 +53,57 @@ void main() {
     return saves;
   }
 
+  group('the bylaw hint', () {
+    Future<void> pumpIn(WidgetTester tester, String provinceId) async {
+      late BuildContext ctx;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                ctx = context;
+                return const SizedBox.expand();
+              },
+            ),
+          ),
+        ),
+      );
+      showLandInfoSheet(
+        ctx,
+        info: const LandInfo(
+          latitude: 45.9,
+          longitude: -71.0,
+          hits: [
+            LandFeature(
+              layerId: 'municipalities',
+              properties: {'name': 'Somewhere'},
+              geometry: {},
+            ),
+          ],
+          attribution: 'test',
+        ),
+        provinceId: provinceId,
+        loader: ProvinceLoader(),
+        manifest: _manifest,
+      );
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('mentions Ontario township names in Ontario', (tester) async {
+      await pumpIn(tester, 'on');
+      expect(find.textContaining('Township of'), findsOneWidget);
+    });
+
+    testWidgets('does not mention Ontario on a Quebec point', (tester) async {
+      await pumpIn(tester, 'qc');
+      expect(find.textContaining('Ontario'), findsNothing);
+      expect(
+        find.text('Check this municipality’s hunting and discharge bylaws.'),
+        findsOneWidget,
+      );
+    });
+  });
+
   testWidgets('offers to save a waypoint at the spot that was asked about',
       (tester) async {
     await pumpSheet(tester, offerSave: true);

@@ -200,9 +200,12 @@ class _LandTab extends StatelessWidget {
               localGov == null
                   ? 'Municipal boundary data is missing for this point, so '
                       'bylaw jurisdiction could not be resolved.'
-                  : 'Check this municipality’s hunting and discharge bylaws '
-                      '(many Ontario municipalities are legally named '
-                      '“Township of …”).',
+                  : provinceId == 'on'
+                      ? 'Check this municipality’s hunting and discharge '
+                          'bylaws (many Ontario municipalities are legally '
+                          'named “Township of …”).'
+                      : 'Check this municipality’s hunting and discharge '
+                          'bylaws.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Colors.black54,
                     height: 1.35,
