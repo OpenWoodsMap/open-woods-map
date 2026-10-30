@@ -25,6 +25,54 @@ class LayerPanel extends StatelessWidget {
     'fishing_access': 'Fishing access (launches & shore)',
   };
 
+  /// Grouped by the question a layer answers, not by who publishes it. A layer
+  /// a later pack adds before it is placed here lands in [otherGroup] rather
+  /// than out of the list.
+  static const groups = <(String, List<String>)>[
+    (
+      'Public land',
+      [
+        'crown_land',
+        'crown_disposition',
+        'municipal_forest',
+        'conservation_authority',
+      ],
+    ),
+    (
+      'Parks & protected areas',
+      [
+        'parks',
+        'conservation_reserve',
+        'game_preserve',
+        'federal_closure',
+        'defence_land',
+        'first_nations',
+        'land_use_plan',
+      ],
+    ),
+    ('Hunting rules & boundaries', ['wmu', 'sunday_gun', 'municipalities']),
+    ('Fishing', ['fishing_access']),
+  ];
+
+  static const otherGroup = 'Other';
+
+  static const _indent = EdgeInsets.only(left: 20);
+
+  /// [available] split into [groups], in the order given, dropping groups the
+  /// pack has nothing for.
+  static List<(String, List<String>)> grouped(List<String> available) {
+    final placed = {for (final (_, ids) in groups) ...ids};
+    return [
+      for (final (title, ids) in groups)
+        if (ids.where(available.contains).toList() case final present
+            when present.isNotEmpty)
+          (title, present),
+      if (available.where((id) => !placed.contains(id)).toList()
+          case final rest when rest.isNotEmpty)
+        (otherGroup, rest),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -47,12 +95,35 @@ class LayerPanel extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Map layers',
-                        style: Theme.of(context).textTheme.headlineSmall),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Map layers',
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
+                        ),
+                        if (controller.toggleableLayerIds.isNotEmpty)
+                          controller.allHidden
+                              ? TextButton.icon(
+                                  onPressed: controller.showLayers,
+                                  icon: const Icon(Icons.layers),
+                                  label: const Text('Show layers'),
+                                )
+                              : TextButton.icon(
+                                  onPressed: controller.hideAll,
+                                  icon: const Icon(Icons.layers_clear),
+                                  label: const Text('Hide all'),
+                                ),
+                      ],
+                    ),
                     const SizedBox(height: 2),
-                    const Text(
-                      'Tap a colour to change it.',
-                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                    Text(
+                      controller.allHidden
+                          ? 'Hidden layers still answer when you tap the map.'
+                          : 'Tap a colour to change it.',
+                      style:
+                          const TextStyle(fontSize: 12, color: Colors.black54),
                     ),
                   ],
                 ),
@@ -69,24 +140,34 @@ class LayerPanel extends StatelessWidget {
                         'No province pack is installed, so there are no '
                         'layers to draw. Download one from Offline packs.',
                       ),
-                    ...controller.availableLayerIds.map(
-                      (id) => controller.carriesNoFeatures(id)
-                          ? _UnavailableLayer(label: labels[id] ?? id)
-                          : CheckboxListTile(
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                              controlAffinity: ListTileControlAffinity.leading,
-                              title: Text(labels[id] ?? id),
-                              value: controller.visibility[id] ?? false,
-                              onChanged: (value) =>
-                                  controller.setVisible(id, value ?? false),
-                              secondary: _Swatch(
-                                color: controller.colorFor(id),
-                                customised: controller.isCustomColor(id),
-                                onTap: () => _pickColor(context, id),
+                    for (final (title, ids)
+                        in grouped(controller.availableLayerIds)) ...[
+                      _GroupHeader(
+                        title: title,
+                        ids: ids
+                            .where((id) => !controller.carriesNoFeatures(id))
+                            .toList(),
+                        controller: controller,
+                      ),
+                      for (final id in ids)
+                        controller.carriesNoFeatures(id)
+                            ? _UnavailableLayer(label: labels[id] ?? id)
+                            : CheckboxListTile(
+                                dense: true,
+                                contentPadding: _indent,
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
+                                title: Text(labels[id] ?? id),
+                                value: controller.visibility[id] ?? false,
+                                onChanged: (value) =>
+                                    controller.setVisible(id, value ?? false),
+                                secondary: _Swatch(
+                                  color: controller.colorFor(id),
+                                  customised: controller.isCustomColor(id),
+                                  onTap: () => _pickColor(context, id),
+                                ),
                               ),
-                            ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -114,6 +195,49 @@ class LayerPanel extends StatelessWidget {
   }
 }
 
+/// A group's title, with a checkbox for the whole group when it has more than
+/// one layer to switch. Part on reads as mixed, and a tap on mixed turns the
+/// rest on: wanting the group is the likelier reason to reach for it.
+class _GroupHeader extends StatelessWidget {
+  const _GroupHeader({
+    required this.title,
+    required this.ids,
+    required this.controller,
+  });
+
+  final String title;
+  final List<String> ids;
+  final OverlayController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.labelLarge?.copyWith(
+          color: Theme.of(context).colorScheme.primary,
+          letterSpacing: 0.6,
+        );
+    final heading = Text(title.toUpperCase(), style: style);
+    if (ids.length < 2) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 14, bottom: 2),
+        child: heading,
+      );
+    }
+    final on = ids.where((id) => controller.visibility[id] == true).length;
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: CheckboxListTile(
+        dense: true,
+        contentPadding: EdgeInsets.zero,
+        controlAffinity: ListTileControlAffinity.leading,
+        tristate: true,
+        title: heading,
+        value: on == ids.length ? true : (on == 0 ? false : null),
+        onChanged: (_) => controller.setVisibleAll(ids, on < ids.length),
+      ),
+    );
+  }
+}
+
 /// A layer the pack declares but has no features for.
 ///
 /// Shown rather than hidden, because the pack says this province is meant to
@@ -130,7 +254,7 @@ class _UnavailableLayer extends StatelessWidget {
     return ListTile(
       dense: true,
       enabled: false,
-      contentPadding: EdgeInsets.zero,
+      contentPadding: LayerPanel._indent,
       leading: Icon(Icons.remove_circle_outline, size: 20, color: muted),
       title: Text(label, style: TextStyle(color: muted)),
       subtitle: Text(

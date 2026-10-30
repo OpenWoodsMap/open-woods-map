@@ -99,6 +99,106 @@ void main() {
     expect(find.text('Direction arrows'), findsNothing);
   });
 
+  group('groups', () {
+    test('every layer this app draws has a group and a label', () {
+      final grouped = {for (final (_, ids) in LayerPanel.groups) ...ids};
+      for (final id in OverlayController.layerOrder) {
+        expect(grouped, contains(id), reason: id);
+        expect(LayerPanel.labels, contains(id), reason: id);
+      }
+    });
+
+    test('a layer no group names lands in Other rather than vanishing', () {
+      final grouped = LayerPanel.grouped(['crown_land', 'deer_yards']);
+      expect(grouped.map((group) => group.$1), ['Public land', 'Other']);
+      expect(grouped.last.$2, ['deer_yards']);
+    });
+
+    testWidgets('a group checkbox switches the whole group', (tester) async {
+      final controller = await _fullPack();
+      await pumpPanel(tester, const Size(1080, 2400), controller);
+
+      await tester.tap(find.text('HUNTING RULES & BOUNDARIES'));
+      await tester.pumpAndSettle();
+      for (final id in ['wmu', 'sunday_gun', 'municipalities']) {
+        expect(controller.visibility[id], isFalse, reason: id);
+      }
+      expect(controller.visibility['crown_land'], isTrue);
+    });
+
+    // Mixed means somebody wanted part of the group, and a tap on the group is
+    // likelier to mean the rest of it than none of it.
+    testWidgets('a part-on group turns fully on', (tester) async {
+      final controller = await _fullPack();
+      await controller.setVisible('wmu', false);
+      await pumpPanel(tester, const Size(1080, 2400), controller);
+
+      await tester.tap(find.text('HUNTING RULES & BOUNDARIES'));
+      await tester.pumpAndSettle();
+      expect(controller.visibility['wmu'], isTrue);
+      expect(controller.visibility['sunday_gun'], isTrue);
+    });
+  });
+
+  group('hide all', () {
+    testWidgets('hides everything, then puts back only what was on',
+        (tester) async {
+      final controller = await _fullPack();
+      await controller.setVisible('wmu', false);
+      await pumpPanel(tester, const Size(1080, 2400), controller);
+
+      await tester.tap(find.text('Hide all'));
+      await tester.pumpAndSettle();
+      expect(controller.allHidden, isTrue);
+      expect(
+        find.text('Hidden layers still answer when you tap the map.'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('Show layers'));
+      await tester.pumpAndSettle();
+      expect(controller.allHidden, isFalse);
+      expect(controller.visibility['crown_land'], isTrue);
+      expect(controller.visibility['wmu'], isFalse);
+    });
+
+    test('what to put back survives a restart', () async {
+      final controller = await _fullPack();
+      await controller.setVisibleAll(OverlayController.layerOrder, false);
+      await controller.setVisible('parks', true);
+      await controller.hideAll();
+
+      final restarted = OverlayController();
+      await restarted.loadPreferences();
+      await restarted.replaceLayers(controller.layers);
+      expect(restarted.allHidden, isTrue);
+      await restarted.showLayers();
+      expect(restarted.visibility['parks'], isTrue);
+      expect(restarted.visibility['crown_land'], isFalse);
+    });
+
+    // Switched off one at a time leaves nothing remembered, and "Show layers"
+    // doing nothing would be a button that is broken.
+    test('with nothing remembered, shows everything', () async {
+      final controller = await _fullPack();
+      await controller.setVisibleAll(OverlayController.layerOrder, false);
+      await controller.showLayers();
+      expect(controller.allHidden, isFalse);
+      expect(
+        OverlayController.layerOrder
+            .every((id) => controller.visibility[id] == true),
+        isTrue,
+      );
+    });
+
+    test('an empty layer does not stop the pack reading as all hidden',
+        () async {
+      final controller = await _quebecPack();
+      await controller.hideAll();
+      expect(controller.allHidden, isTrue);
+    });
+  });
+
   group('only what the pack carries', () {
     // The bug: the panel listed every layer this app can draw, so a Quebec pack
     // of four offered fourteen toggles. Ten of them controlled nothing, and

@@ -31,6 +31,7 @@ import '../tracks/track_follow.dart';
 import '../tracks/track_layers.dart';
 import '../tracks/track_math.dart';
 import '../tracks/track_style.dart';
+import '../tracks/trim_page.dart';
 import '../ui/messages.dart';
 import '../weather/weather.dart';
 import '../waypoints/import_export.dart';
@@ -238,7 +239,16 @@ class _MapShellState extends State<MapShell> {
     _display.addListener(_onDisplayChanged);
     _visibility.addListener(_onVisibilityChanged);
     _customMaps.addListener(_onCustomMapsChanged);
+    _overlays.addListener(_onOverlaysChanged);
     _bootstrap();
+  }
+
+  var _layersAllHidden = false;
+
+  void _onOverlaysChanged() {
+    final hidden = _overlays.allHidden;
+    if (!mounted || hidden == _layersAllHidden) return;
+    setState(() => _layersAllHidden = hidden);
   }
 
   @override
@@ -247,6 +257,7 @@ class _MapShellState extends State<MapShell> {
     _display.removeListener(_onDisplayChanged);
     _visibility.removeListener(_onVisibilityChanged);
     _customMaps.removeListener(_onCustomMapsChanged);
+    _overlays.removeListener(_onOverlaysChanged);
     _display.dispose();
     _visibility.dispose();
     _customMaps.dispose();
@@ -955,7 +966,8 @@ class _MapShellState extends State<MapShell> {
           // which is a licence condition and not ours to cover up, and of the
           // zoom and locate buttons down the right, which otherwise sit on top of
           // these dismiss buttons.
-          if (_wind != null ||
+          if (_layersAllHidden ||
+              _wind != null ||
               _windLoading ||
               _highlightedArea != null ||
               _spot != null)
@@ -968,6 +980,17 @@ class _MapShellState extends State<MapShell> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // A bare map reads as ground with nothing on it, which is the
+                  // one thing it is not, so it says why it is bare for as long
+                  // as it is.
+                  if (_layersAllHidden) ...[
+                    _LayersHiddenChip(onShow: _overlays.showLayers),
+                    if (_wind != null ||
+                        _windLoading ||
+                        _highlightedArea != null ||
+                        _spot != null)
+                      const SizedBox(height: 8),
+                  ],
                   if (_wind != null || _windLoading) ...[
                     WindChip(
                       reading: _wind,
@@ -3138,6 +3161,8 @@ class _MapShellState extends State<MapShell> {
       RevealWaypoint(:final waypoint) => waypoint,
       // Following frames the track itself, so there is nothing left to reveal.
       FollowTrack() => null,
+      // Revealed once trimmed, so the map frames what is left of it.
+      TrimTrack() => null,
       null => null,
     };
     await _syncWaypointSource();
@@ -3147,6 +3172,12 @@ class _MapShellState extends State<MapShell> {
     if (reveal != null) await _revealWaypoint(reveal);
     if (request case FollowTrack(:final track, :final reversed)) {
       await _startFollowing(track, reversed: reversed);
+    }
+    if (request case TrimTrack(:final track)) {
+      await _trimFromCard(track);
+      final trimmed =
+          _waypoints.items.where((item) => item.id == track.id).firstOrNull;
+      if (trimmed != null && mounted) await _revealWaypoint(trimmed);
     }
   }
 
@@ -3195,6 +3226,8 @@ class _MapShellState extends State<MapShell> {
           setState(() => _followTrack = edited);
           await _syncFollowSource();
         }
+      case TrimFromCard(:final track):
+        await _trimFromCard(track);
       case DeleteFromCard(waypoint: final subject):
         await _deleteFromCard(subject);
       case FollowFromCard(:final track, :final reversed):
@@ -3226,6 +3259,38 @@ class _MapShellState extends State<MapShell> {
       actionLabel: 'UNDO',
       onAction: () => _visibility.setItemHidden(waypoint.id, hidden: false),
     );
+  }
+
+  /// Undo puts back only the line, onto the track as it is by then, so a rename
+  /// made while the snackbar was up is not reverted along with the trim.
+  Future<void> _trimFromCard(Waypoint track) async {
+    final kept = await Navigator.push<List<TrackPoint>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TrimTrackPage(track: track, styleString: _styleString),
+      ),
+    );
+    if (kept == null || kept.length < 2 || !mounted) return;
+    await _replaceTrackLine(track.id, kept);
+    if (!mounted) return;
+    showMessage(
+      context,
+      'Trimmed ${track.name} to ${formatDistance(trackLengthMetres(kept))}.',
+      actionLabel: 'UNDO',
+      onAction: () => _replaceTrackLine(track.id, track.track),
+    );
+  }
+
+  Future<void> _replaceTrackLine(String id, List<TrackPoint> points) async {
+    final current = _waypoints.items.where((item) => item.id == id).firstOrNull;
+    if (current == null) return;
+    final next = current.withTrack(points);
+    await _waypoints.update(next);
+    await _syncWaypointSource();
+    if (_followTrack?.id == id && mounted) {
+      setState(() => _followTrack = next);
+      await _syncFollowSource();
+    }
   }
 
   /// Deletes what the user just tapped, offering the same undo the list does.
@@ -3548,4 +3613,44 @@ enum _MapMenuItem {
 
   final String label;
   final IconData icon;
+}
+
+class _LayersHiddenChip extends StatelessWidget {
+  const _LayersHiddenChip({required this.onShow});
+
+  final VoidCallback onShow;
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: const Color(0xE61B4332),
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 2, 2, 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.layers_clear, size: 16, color: Color(0xFFFFFBF0)),
+              const SizedBox(width: 8),
+              const Flexible(
+                child: Text(
+                  'Layers hidden. Tap a spot to see what is there.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.3,
+                    color: Color(0xFFFFFBF0),
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: onShow,
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF76FF03),
+                  visualDensity: VisualDensity.compact,
+                ),
+                child: const Text('Show'),
+              ),
+            ],
+          ),
+        ),
+      );
 }

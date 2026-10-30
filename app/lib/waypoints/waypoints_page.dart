@@ -40,6 +40,11 @@ class FollowTrack extends WaypointsRequest {
   final bool reversed;
 }
 
+class TrimTrack extends WaypointsRequest {
+  const TrimTrack(this.track);
+  final Waypoint track;
+}
+
 class WaypointsPage extends StatefulWidget {
   const WaypointsPage({
     super.key,
@@ -884,6 +889,7 @@ class _WaypointsPageState extends State<WaypointsPage> {
               'edit' => _edit(waypoint),
               'follow' => _follow(waypoint, reversed: false),
               'reverse' => _follow(waypoint, reversed: true),
+              'trim' => Navigator.pop(context, TrimTrack(waypoint)),
               _ => _delete(waypoint),
             },
             itemBuilder: (context) => [
@@ -897,6 +903,7 @@ class _WaypointsPageState extends State<WaypointsPage> {
                   value: 'reverse',
                   child: Text('Follow in reverse'),
                 ),
+                const PopupMenuItem(value: 'trim', child: Text('Trim…')),
               ],
               const PopupMenuItem(value: 'delete', child: Text('Delete')),
             ],

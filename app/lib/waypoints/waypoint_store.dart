@@ -208,6 +208,24 @@ class Waypoint {
         stroke: stroke ?? this.stroke,
         marker: marker ?? this.marker,
       );
+
+  /// The same track along a different line. Its position moves to the new
+  /// first point, because a track is placed where it starts and a trimmed start
+  /// would otherwise leave it listed and sorted by ground it no longer covers.
+  Waypoint withTrack(List<TrackPoint> points) => Waypoint(
+        id: id,
+        name: name,
+        latitude: points.first.latitude,
+        longitude: points.first.longitude,
+        notes: notes,
+        createdAt: createdAt,
+        icon: icon,
+        tags: tags,
+        colour: colour,
+        track: List.of(points),
+        stroke: stroke,
+        marker: marker,
+      );
 }
 
 /// Trims, lowercases, drops blanks and de-duplicates, preserving first-seen

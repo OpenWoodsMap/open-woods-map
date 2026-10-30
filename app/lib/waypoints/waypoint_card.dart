@@ -23,6 +23,12 @@ final class FollowFromCard extends WaypointCardRequest {
   final bool reversed;
 }
 
+final class TrimFromCard extends WaypointCardRequest {
+  const TrimFromCard(this.track);
+
+  final Waypoint track;
+}
+
 final class DeleteFromCard extends WaypointCardRequest {
   const DeleteFromCard(this.waypoint);
 
@@ -170,6 +176,13 @@ class _WaypointCard extends StatelessWidget {
                 icon: const Icon(Icons.edit_outlined),
                 label: const Text('Edit'),
               ),
+              if (_isTrack)
+                OutlinedButton.icon(
+                  onPressed: () =>
+                      Navigator.pop(context, TrimFromCard(waypoint)),
+                  icon: const Icon(Icons.content_cut),
+                  label: const Text('Trim'),
+                ),
               TextButton.icon(
                 onPressed: () =>
                     Navigator.pop(context, const LandInfoFromCard()),

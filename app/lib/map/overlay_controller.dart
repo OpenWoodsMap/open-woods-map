@@ -49,7 +49,12 @@ class OverlayController extends ChangeNotifier {
   /// existed.
   static const _hiddenPrefKey = 'overlay.hidden';
 
+  /// What was on before [hideAll], so [showLayers] puts back the user's own
+  /// choice rather than switching on every overlapping layer at once.
+  static const _beforeHideAllPrefKey = 'overlay.beforeHideAll';
+
   final Map<String, bool> visibility;
+  Set<String> _beforeHideAll = {};
   final Map<String, String> _colorOverrides = {};
   MapLibreMapController? _map;
   Map<String, LoadedLayer> _layers = const {};
@@ -123,6 +128,9 @@ class OverlayController extends ChangeNotifier {
     for (final id in prefs.getStringList(_hiddenPrefKey) ?? const <String>[]) {
       if (visibility.containsKey(id)) visibility[id] = false;
     }
+    _beforeHideAll = {
+      ...?prefs.getStringList(_beforeHideAllPrefKey),
+    };
     final raw = prefs.getString(_colorPrefKey);
     if (raw != null) {
       try {
@@ -211,8 +219,42 @@ class OverlayController extends ChangeNotifier {
     }
   }
 
-  Future<void> setVisible(String id, bool value) async {
-    visibility[id] = value;
+  /// The layers a toggle can do something to: in the pack, and not empty.
+  List<String> get toggleableLayerIds => availableLayerIds
+      .where((id) => !carriesNoFeatures(id))
+      .toList(growable: false);
+
+  /// Whether every layer that could be drawn is switched off.
+  bool get allHidden {
+    final ids = toggleableLayerIds;
+    return ids.isNotEmpty && ids.every((id) => visibility[id] != true);
+  }
+
+  Future<void> hideAll() async {
+    final shown = toggleableLayerIds.where((id) => visibility[id] == true);
+    if (shown.isEmpty) return;
+    _beforeHideAll = shown.toSet();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_beforeHideAllPrefKey, _beforeHideAll.toList());
+    await setVisibleAll(toggleableLayerIds, false);
+  }
+
+  /// Back to what [hideAll] switched off, or everything when there is no such
+  /// memory, as after the layers were switched off one at a time.
+  Future<void> showLayers() async {
+    final ids = toggleableLayerIds;
+    final remembered = ids.where(_beforeHideAll.contains).toList();
+    await setVisibleAll(remembered.isEmpty ? ids : remembered, true);
+  }
+
+  Future<void> setVisible(String id, bool value) =>
+      setVisibleAll([id], value);
+
+  Future<void> setVisibleAll(Iterable<String> ids, bool value) async {
+    final changed = ids.toList();
+    for (final id in changed) {
+      visibility[id] = value;
+    }
     notifyListeners();
     final hidden = [
       for (final layer in layerOrder)
@@ -225,13 +267,15 @@ class OverlayController extends ChangeNotifier {
       await prefs.setStringList(_hiddenPrefKey, hidden);
     }
     final map = _map;
-    if (map == null || !_added.contains(id)) return;
+    if (map == null) return;
     // Dropped to zero opacity rather than hidden: MapLibre only hit-tests
     // layers it still renders, and a toggle is about what the map shows, never
     // about what Land Info answers. Someone who hides game preserves to see the
     // parcels underneath and then taps inside one must still be told it is a
     // preserve; leaving it out would be a wrong answer, not a quieter one.
-    await _paint(map, id, value);
+    for (final id in changed.where(_added.contains)) {
+      await _paint(map, id, value);
+    }
   }
 
   /// Layers a tap should be resolved against, in draw order. Every installed
