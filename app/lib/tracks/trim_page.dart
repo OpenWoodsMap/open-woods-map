@@ -44,8 +44,6 @@ class _TrimTrackPageState extends State<TrimTrackPage> {
           ? secondsAlong(_points)
           : [for (var i = 0; i < _points.length; i++) i.toDouble()];
 
-  late final TrimSuggestion? _suggestion = suggestTrim(_points);
-
   late int _start = 0;
   late int _end = _points.length - 1;
 
@@ -223,11 +221,6 @@ class _TrimTrackPageState extends State<TrimTrackPage> {
     }
   }
 
-  Future<void> _applySuggestion(TrimSuggestion suggestion) async {
-    _setRange(suggestion.start, suggestion.end);
-    await _fit(trimTrack(_points, suggestion.start, suggestion.end));
-  }
-
   String _at(int index) {
     final time = _points[index].time;
     if (!_timed || time == null) {
@@ -253,7 +246,6 @@ class _TrimTrackPageState extends State<TrimTrackPage> {
     final cut = _metres.last - kept;
     final keptPoints = trimTrack(_points, _start, _end);
     final keptTime = _timed ? trackDuration(keptPoints) : null;
-    final suggestion = _suggestion;
     return Scaffold(
       appBar: AppBar(title: Text('Trim ${widget.track.name}')),
       body: Column(
@@ -327,24 +319,6 @@ class _TrimTrackPageState extends State<TrimTrackPage> {
                               ? () => _setRange(_start, _end + 1)
                               : null,
                     ),
-                    if (suggestion != null) ...[
-                      const SizedBox(height: 8),
-                      OutlinedButton.icon(
-                        onPressed:
-                            suggestion == TrimSuggestion(_start, _end)
-                                ? null
-                                : () => _applySuggestion(suggestion),
-                        icon: const Icon(Icons.directions_car_outlined),
-                        label: const Text('Cut the driving'),
-                      ),
-                      Text(
-                        'A guess from speed: where you were moving faster '
-                        'than ${drivingKilometresPerHour.round()} km/h. A long '
-                        'stop on the way can fool it, so check the ends on '
-                        'the map.',
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ],
                     const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,

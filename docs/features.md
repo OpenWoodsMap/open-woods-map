@@ -18,12 +18,6 @@ each feature does, and where it stops.
   and *Show layers* puts back the set that was on. While everything is hidden
   the map says so, because a bare map otherwise reads as ground with nothing on
   it
-- **Layer groups and Hide all:** the toggles sit in four groups (public land,
-  parks and protected areas, hunting rules and boundaries, fishing), each with
-  a checkbox for the whole group. *Hide all* clears the map for plain browsing
-  and *Show layers* puts back the set that was on. While everything is hidden
-  the map says so, because a bare map otherwise reads as ground with nothing on
-  it
 - **Closures outrank tenure:** Crown game preserves, National Wildlife Areas,
   Migratory Bird Sanctuaries and National Defence property are drawn over Crown
   land and reported first, since hunting there is prohibited whatever the tenure
@@ -115,17 +109,7 @@ each feature does, and where it stops.
 - **Trim a track:** cut either end off, most often the drive home left
   recording after the walk. A slider runs along the track by clock time where
   it has times, so the walk gets most of its length, with a one-point step
-  for each end; the part being cut is drawn in grey. For a recording, *Cut the
-  driving* moves both ends to where the track was travelling faster than
-  25 km/h. It is a guess from speed, says so, and can be fooled by a long stop
-  on the way home or by an ATV ride in. Undo puts the line back
-- **Trim a track:** cut either end off, most often the drive home left
-  recording after the walk. A slider runs along the track by clock time where
-  it has times, so the walk gets most of its length, with a one-point step
-  for each end; the part being cut is drawn in grey. For a recording, *Cut the
-  driving* moves both ends to where the track was travelling faster than
-  25 km/h. It is a guess from speed, says so, and can be fooled by a long stop
-  on the way home or by an ATV ride in. Undo puts the line back
+  for each end; the part being cut is drawn in grey. Undo puts the line back
 - **Overlapping marks:** a tap on several waypoints or tracks at once opens the
   nearest and lists the rest under *Also here*
 - **Hide from the map** without deleting: per item, per tag, or everything the
