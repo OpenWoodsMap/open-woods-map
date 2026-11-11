@@ -18,6 +18,13 @@ each feature does, and where it stops.
   and *Show layers* puts back the set that was on. While everything is hidden
   the map says so, because a bare map otherwise reads as ground with nothing on
   it
+- **Hill, mountain and wetland names:** official names from the pack's
+  place-name index are drawn on the map from zoom 10, landforms in brown and
+  marshes, swamps and bogs in teal. They name the patches of bush the basemap
+  leaves blank (Gariepy Mountains, Feeleys Marsh). CGNDB records one point per
+  name, so each is a label, never an outline: where the name stops is not in
+  the source and the map does not guess. On by default, with a switch at the
+  bottom of Map layers that *Hide all* leaves alone
 - **Closures outrank tenure:** Crown game preserves, National Wildlife Areas,
   Migratory Bird Sanctuaries and National Defence property are drawn over Crown
   land and reported first, since hunting there is prohibited whatever the tenure

@@ -54,6 +54,7 @@ import 'measure.dart';
 import 'measure_bar.dart';
 import 'overlay_controller.dart';
 import 'own_hits.dart';
+import 'place_labels.dart';
 import 'share_location.dart';
 import 'spot_card.dart';
 import 'walking_location.dart';
@@ -245,6 +246,10 @@ class _MapShellState extends State<MapShell> {
 
   var _layersAllHidden = false;
 
+  /// The place-name setting as last applied, so the many display changes that
+  /// have nothing to do with it do not redraw a few thousand labels.
+  late var _placeNamesDrawn = _display.showPlaceNames;
+
   void _onOverlaysChanged() {
     final hidden = _overlays.allHidden;
     if (!mounted || hidden == _layersAllHidden) return;
@@ -278,6 +283,10 @@ class _MapShellState extends State<MapShell> {
     // happened to be at, with the gesture to fix it now disabled, would be a
     // setting that pins the map crooked.
     if (_display.lockNorth && _mapIsRotated) _resetNorth();
+    if (_display.showPlaceNames != _placeNamesDrawn) {
+      _placeNamesDrawn = _display.showPlaceNames;
+      _syncPlaceLabels();
+    }
     // Saved tracks come along with the waypoints; the followed one is drawn
     // from its own source and would otherwise keep its old arrow size until
     // following stopped.
@@ -372,6 +381,10 @@ class _MapShellState extends State<MapShell> {
         _error = null;
       });
       await _overlays.replaceLayers(data.layers);
+      // A reinstalled pack may carry a different index, and the loader's own
+      // cache is what notices.
+      _placeLabels = null;
+      await _syncPlaceLabels();
     } on PackNotInstalled {
       if (!mounted || id != _provinceId) return;
       setState(() {
@@ -380,6 +393,7 @@ class _MapShellState extends State<MapShell> {
         _error = null;
       });
       await _overlays.replaceLayers(const {});
+      await _syncPlaceLabels();
     } catch (error) {
       if (!mounted || id != _provinceId) return;
       setState(() => _error = 'Could not load $id data: $error');
@@ -822,6 +836,7 @@ class _MapShellState extends State<MapShell> {
                 // give. See [_syncCustomMaps].
                 await _syncCustomMaps();
                 await _attachLayers();
+                await _syncPlaceLabels();
                 await _syncWaypointSource();
                 await _syncActiveTrackSource();
                 await _syncMeasureSource();
@@ -1721,6 +1736,110 @@ class _MapShellState extends State<MapShell> {
       // A style reload already took it, which is the ordinary case on a basemap
       // swap and not worth reporting.
     }
+  }
+
+  static const _placeLabelSource = 'owm-place-labels';
+  static const _placeLabelLayer = 'owm-place-label-text';
+
+  /// Built once per province: the index is already parsed for search, and
+  /// filtering 57,000 records on every basemap swap would be wasted work.
+  ({String province, Map<String, dynamic> labels, String attribution})?
+      _placeLabels;
+  Future<void> _placeLabelQueue = Future.value();
+
+  /// Serialised, because a style load, a pack install and the switch can all
+  /// ask at once, and two overlapping runs would add the source twice.
+  Future<void> _syncPlaceLabels() =>
+      _placeLabelQueue = _placeLabelQueue.then((_) => _drawPlaceLabels());
+
+  Future<void> _drawPlaceLabels() async {
+    final map = _map;
+    if (!_styleReady || map == null) return;
+    try {
+      await map.removeLayer(_placeLabelLayer);
+    } catch (_) {}
+    try {
+      await map.removeSource(_placeLabelSource);
+    } catch (_) {}
+    if (!_display.showPlaceNames || _provinceData == null) return;
+
+    final province = _provinceId;
+    var labels = _placeLabels;
+    if (labels == null || labels.province != province) {
+      final index = (await _loader.loadGazetteer(province)).index;
+      // An older pack has no index, and these are context, not an answer, so
+      // the map simply goes without them.
+      if (index == null || !mounted || province != _provinceId) return;
+      labels = (
+        province: province,
+        labels: placeLabelCollection(index),
+        attribution: index.attribution,
+      );
+      _placeLabels = labels;
+    }
+    if (map != _map || !_styleReady) return;
+    try {
+      await map.addSource(
+        _placeLabelSource,
+        GeojsonSourceProperties(
+          data: labels.labels,
+          // Android's attribution dialog ignores GeoJSON sources, which is why
+          // the Map layers switch carries the credit too.
+          attribution: labels.attribution.isEmpty ? null : labels.attribution,
+        ),
+      );
+      await map.addSymbolLayer(
+        _placeLabelSource,
+        _placeLabelLayer,
+        const SymbolLayerProperties(
+          textField: ['get', 'name'],
+          textFont: _nameFont,
+          textSize: [
+            Expressions.match,
+            ['get', 'kind'],
+            'wetland',
+            11,
+            12,
+          ],
+          textColor: [
+            Expressions.match,
+            ['get', 'kind'],
+            'wetland',
+            '#00695C',
+            '#6D4C41',
+          ],
+          textHaloColor: '#FFFFFF',
+          textHaloWidth: 1.5,
+          textMaxWidth: 8,
+          // Spaced out like a map's own feature names, so they do not read as
+          // one more waypoint name in the same font.
+          textLetterSpacing: 0.1,
+        ),
+        // Under everything of the user's own, so a waypoint name wins any
+        // collision, and over the tenure fills, which would tint the text.
+        belowLayerId: await _placeLabelAnchor(map),
+        minzoom: 10,
+      );
+    } catch (error) {
+      _toast('Place names could not be drawn: $error');
+    }
+  }
+
+  /// The lowest layer above the land overlays, which is where place names go.
+  Future<String?> _placeLabelAnchor(MapLibreMapController map) async {
+    for (final id in await map.getLayerIds()) {
+      final name = '$id';
+      if (!name.startsWith('owm-') ||
+          name.startsWith(_customPrefix) ||
+          name.startsWith('owm-fill-') ||
+          name.startsWith('owm-line-') ||
+          name.startsWith('owm-circle-') ||
+          name == _placeLabelLayer) {
+        continue;
+      }
+      return name;
+    }
+    return null;
   }
 
   /// The bottom-most layer the app itself added, for inserting custom maps under.
@@ -3112,7 +3231,11 @@ class _MapShellState extends State<MapShell> {
       // Without this the sheet is capped near half the screen, which is shorter
       // than the layer list. The panel constrains its own height.
       isScrollControlled: true,
-      builder: (_) => LayerPanel(controller: _overlays),
+      builder: (_) => LayerPanel(
+        controller: _overlays,
+        display: _display,
+        placeNameCredit: _provinceData?.manifest.gazetteer?.attribution,
+      ),
     );
   }
 

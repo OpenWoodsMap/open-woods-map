@@ -775,6 +775,14 @@ dataset here that carries no legal weight at all: a gazetteer point is a label,
 not a boundary, and tapping a result moves the map and nothing else. The Land
 Info card still decides what the rules are at wherever you land.
 
+The same index also labels the map with hill, mountain, ridge, valley and
+wetland names (about 3,400 in Ontario and 6,400 in Quebec at the current
+build; the type list is in `app/lib/map/place_labels.dart`). Labels need no
+extra download. The OGL credit is printed on their switch in Map layers,
+because no Land Info card cites a label and MapLibre's Android ⓘ dialog ignores
+the attribution of a GeoJSON source. They are points, never areas, for the
+same reason as above.
+
 ### It is not a road network, and the UI must never suggest it is
 
 CGNDB does contain named roads and trails. It contains them the way a lost and

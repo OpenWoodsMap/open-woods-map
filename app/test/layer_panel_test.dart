@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:open_woods_map/data/models.dart';
 import 'package:open_woods_map/map/layer_panel.dart';
 import 'package:open_woods_map/map/overlay_controller.dart';
+import 'package:open_woods_map/settings/display_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 LoadedLayer _layer(String id, int featureCount) => LoadedLayer(
@@ -271,6 +272,66 @@ void main() {
         find.textContaining('No province pack is installed'),
         findsOneWidget,
       );
+    });
+  });
+
+  group('place names', () {
+    const credit =
+        'Contains information licensed under the Open Government Licence – '
+        'Canada.';
+    const switchLabel = 'Hill, mountain & wetland names';
+
+    Future<DisplaySettings> pumpWith(
+      WidgetTester tester, {
+      String? placeNameCredit,
+    }) async {
+      final display = DisplaySettings();
+      final controller = await _quebecPack();
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: LayerPanel(
+              controller: controller,
+              display: display,
+              placeNameCredit: placeNameCredit,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return display;
+    }
+
+    // The credit is an OGL condition, and no Land Info card cites a label.
+    testWidgets('the switch carries the licence credit', (tester) async {
+      await pumpWith(tester, placeNameCredit: credit);
+      await tester.scrollUntilVisible(find.text(switchLabel), 200);
+      expect(find.textContaining(credit), findsOneWidget);
+    });
+
+    testWidgets('a pack with no index offers no switch', (tester) async {
+      await pumpWith(tester);
+      expect(find.text(switchLabel), findsNothing);
+    });
+
+    testWidgets('on by default, and the switch turns them off',
+        (tester) async {
+      final display = await pumpWith(tester, placeNameCredit: credit);
+      expect(display.showPlaceNames, isTrue);
+      await tester.scrollUntilVisible(find.text(switchLabel), 200);
+      await tester.tap(find.text(switchLabel));
+      await tester.pumpAndSettle();
+      expect(display.showPlaceNames, isFalse);
+    });
+
+    testWidgets('Hide all leaves place names alone', (tester) async {
+      final display = await pumpWith(tester, placeNameCredit: credit);
+      await tester.tap(find.text('Hide all'));
+      await tester.pumpAndSettle();
+      expect(display.showPlaceNames, isTrue);
     });
   });
 }

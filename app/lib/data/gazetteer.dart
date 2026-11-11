@@ -75,6 +75,21 @@ class PlaceMatch {
   final bool isPrefixMatch;
 }
 
+/// One named place, without the search ranking a [PlaceMatch] carries.
+class PlacePoint {
+  const PlacePoint({
+    required this.name,
+    required this.featureType,
+    required this.latitude,
+    required this.longitude,
+  });
+
+  final String name;
+  final String featureType;
+  final double latitude;
+  final double longitude;
+}
+
 /// What a search found: the best few, and how many there were.
 ///
 /// [total] is carried because a gazetteer answer is often "312 places match,
@@ -240,6 +255,25 @@ class GazetteerIndex {
   final List<String> _contexts;
 
   int get recordCount => _names.length;
+
+  /// Every place whose CGNDB `Generic Term` is one of [types].
+  List<PlacePoint> placesOfType(Set<String> types) {
+    final wanted = <int>{
+      for (var id = 0; id < _types.length; id++)
+        if (types.contains(_types[id])) id,
+    };
+    final scale = coordinateScale;
+    return [
+      for (var record = 0; record < _names.length; record++)
+        if (wanted.contains(_typeIds[record]))
+          PlacePoint(
+            name: _names[record],
+            featureType: _types[_typeIds[record]],
+            latitude: _latitudeE5[record] / scale,
+            longitude: _longitudeE5[record] / scale,
+          ),
+    ];
+  }
 
   /// Parses the index file.
   ///

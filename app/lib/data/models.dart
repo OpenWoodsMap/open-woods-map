@@ -63,8 +63,9 @@ class LayerManifest {
 
 /// The place-name index a pack declares, if it declares one.
 ///
-/// A separate entry rather than a [LayerManifest] because it is not drawn: the
-/// gazetteer has no geometry MapLibre can render and no overlay toggle. It
+/// A separate entry rather than a [LayerManifest] because it is not an overlay:
+/// some of its points label the map, but it has no areas for Land Info to
+/// answer from and no overlay toggle. It
 /// carries its own `source`, `license` and `license_url` for the same reason
 /// every layer does — the pack has to say where its data came from, and a
 /// gazetteer under a different licence from the rest of the province is exactly

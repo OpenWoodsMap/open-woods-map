@@ -1,11 +1,25 @@
 import 'package:flutter/material.dart';
 
+import '../settings/display_settings.dart';
 import 'overlay_controller.dart';
 
 class LayerPanel extends StatelessWidget {
-  const LayerPanel({super.key, required this.controller});
+  const LayerPanel({
+    super.key,
+    required this.controller,
+    this.display,
+    this.placeNameCredit,
+  });
 
   final OverlayController controller;
+
+  /// Where the place-name switch lives.
+  final DisplaySettings? display;
+
+  /// The licence credit of the pack's place-name index, shown on the switch
+  /// because no Land Info card ever cites a label. Null when the pack has no
+  /// index, which leaves the section out rather than offering a dead switch.
+  final String? placeNameCredit;
 
   static const labels = {
     'crown_land': 'Crown land parcels',
@@ -77,7 +91,7 @@ class LayerPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return SafeArea(
       child: AnimatedBuilder(
-        animation: controller,
+        animation: Listenable.merge([controller, display]),
         builder: (context, _) => ConstrainedBox(
           // The layer list has outgrown a short sheet, and on a landscape
           // tablet it is taller than the screen. Cap the sheet and scroll the
@@ -167,6 +181,27 @@ class LayerPanel extends StatelessWidget {
                                   onTap: () => _pickColor(context, id),
                                 ),
                               ),
+                    ],
+                    if ((display, placeNameCredit)
+                        case (final display?, final credit?)) ...[
+                      _GroupHeader(
+                        title: 'Place names',
+                        ids: const [],
+                        controller: controller,
+                      ),
+                      CheckboxListTile(
+                        dense: true,
+                        contentPadding: _indent,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: const Text('Hill, mountain & wetland names'),
+                        subtitle: Text(
+                          'Official names, placed at one point each. Where a '
+                          'name ends is not recorded. $credit',
+                        ),
+                        value: display.showPlaceNames,
+                        onChanged: (value) =>
+                            display.setShowPlaceNames(value ?? true),
+                      ),
                     ],
                   ],
                 ),
