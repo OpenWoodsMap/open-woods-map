@@ -117,6 +117,11 @@ class AreaDownloadProgress {
   final int tilesTotal;
 }
 
+/// Thrown when the user cancels an in-progress basemap area download.
+class DownloadCancelled implements Exception {
+  const DownloadCancelled();
+}
+
 /// Creates, lists and deletes offline basemap areas.
 ///
 /// A single shared instance, because a download outlives the screen that
@@ -137,6 +142,9 @@ class BasemapAreaStore {
   int _active = 0;
   AreaDownloadProgress? _latest;
   String? _downloadingName;
+  int? _activeRegionId;
+  Completer<void>? _activeFinished;
+  var _cancelRequested = false;
 
   /// Progress of the running download, or null between downloads.
   Stream<AreaDownloadProgress?> get progress => _progress.stream;
@@ -232,6 +240,8 @@ class BasemapAreaStore {
     await _configure();
     _active++;
     _downloadingName = name;
+    _cancelRequested = false;
+    _activeRegionId = null;
 
     final asset = basemap.assetStylePath;
     final String styleUrl;
@@ -263,6 +273,7 @@ class BasemapAreaStore {
     // call itself would close the style server out from under the downloader
     // and tell the user the area was saved before a single tile had arrived.
     final finished = Completer<void>();
+    _activeFinished = finished;
 
     try {
       final region = await downloadOfflineRegion(
@@ -277,6 +288,7 @@ class BasemapAreaStore {
         onEvent: (event) {
           switch (event) {
             case InProgress():
+              if (_cancelRequested) return;
               lastBytes = event.completedResourceSize;
               final report = AreaDownloadProgress(
                 fraction: (event.progress / 100).clamp(0.0, 1.0),
@@ -290,10 +302,19 @@ class BasemapAreaStore {
             case Success():
               if (!finished.isCompleted) finished.complete();
             case Error():
-              if (!finished.isCompleted) finished.completeError(event.cause);
+              if (!finished.isCompleted) {
+                finished.completeError(
+                  _cancelRequested ? const DownloadCancelled() : event.cause,
+                );
+              }
           }
         },
       );
+      _activeRegionId = region.id;
+      if (_cancelRequested) {
+        await delete(region.id);
+        throw const DownloadCancelled();
+      }
       onRegionCreated?.call(region.id);
       await finished.future;
 
@@ -313,11 +334,30 @@ class BasemapAreaStore {
       _active--;
       if (_active == 0) {
         _downloadingName = null;
+        _activeRegionId = null;
+        _activeFinished = null;
+        _cancelRequested = false;
         _latest = null;
         _progress.add(null);
         // The pruned style is only needed while the downloader is reading it.
         await _styleServer.close();
       }
+    }
+  }
+
+  /// Stops the active download and deletes its partial region.
+  Future<void> cancelActiveDownload() async {
+    if (_active == 0) return;
+    _cancelRequested = true;
+    final regionId = _activeRegionId;
+    final finished = _activeFinished;
+    if (regionId != null) {
+      try {
+        await delete(regionId);
+      } catch (_) {}
+    }
+    if (finished != null && !finished.isCompleted) {
+      finished.completeError(const DownloadCancelled());
     }
   }
 

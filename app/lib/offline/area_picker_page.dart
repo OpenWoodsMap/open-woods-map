@@ -119,6 +119,7 @@ class _AreaPickerPageState extends State<AreaPickerPage> {
   final Map<BasemapKind, String> _styles = {};
   final Map<BasemapKind, List<TileSourceSpec>> _sources = {};
 
+  late CameraPosition _camera = _initialCamera;
   LatLngBounds? _frameBounds;
   SizeEstimate? _estimate;
   Size _mapSize = Size.zero;
@@ -248,7 +249,10 @@ class _AreaPickerPageState extends State<AreaPickerPage> {
   }
 
   SizeEstimate _estimateFor(LatLngBounds bounds) {
-    final sources = _currentSources;
+    final style = _styles[_basemap];
+    final sources = style != null
+        ? sourceSpecsFromStyle(pruneStyleToArea(style, bounds))
+        : _currentSources;
     return estimateRegionSize(
       bounds: bounds,
       minZoom: minOfflineZoom,
@@ -288,12 +292,13 @@ class _AreaPickerPageState extends State<AreaPickerPage> {
                           MapLibreMap(
                             key: ValueKey('picker-${_basemap.name}'),
                             styleString: _styleString,
-                            initialCameraPosition: _initialCamera,
+                            initialCameraPosition: _camera,
                             trackCameraPosition: true,
                             compassEnabled: false,
                             onMapCreated: (controller) =>
                                 _map = controller,
                             onStyleLoadedCallback: _onStyleLoaded,
+                            onCameraMove: (position) => _camera = position,
                             onCameraIdle: _recomputeBounds,
                           ),
                           const IgnorePointer(child: _FrameOverlay()),
@@ -309,8 +314,68 @@ class _AreaPickerPageState extends State<AreaPickerPage> {
   }
 
   Future<void> _onStyleLoaded() async {
+    await _drawExistingAreas();
     await _frameEditedArea();
     await _recomputeBounds();
+  }
+
+  /// Outlines areas already saved on this device so the user can see gaps and
+  /// overlaps while framing a new box.
+  Future<void> _drawExistingAreas() async {
+    final map = _map;
+    if (map == null) return;
+    final others = [
+      for (final area in widget.existing)
+        if (area.regionId != widget.editing?.regionId) area,
+    ];
+    if (others.isEmpty) return;
+    final collection = {
+      'type': 'FeatureCollection',
+      'features': [
+        for (final area in others)
+          {
+            'type': 'Feature',
+            'properties': {'name': area.name},
+            'geometry': {
+              'type': 'Polygon',
+              'coordinates': [
+                [
+                  [area.bounds.southwest.longitude, area.bounds.southwest.latitude],
+                  [area.bounds.northeast.longitude, area.bounds.southwest.latitude],
+                  [area.bounds.northeast.longitude, area.bounds.northeast.latitude],
+                  [area.bounds.southwest.longitude, area.bounds.northeast.latitude],
+                  [area.bounds.southwest.longitude, area.bounds.southwest.latitude],
+                ],
+              ],
+            },
+          },
+      ],
+    };
+    try {
+      await map.addSource(
+        'picker-existing-areas',
+        GeojsonSourceProperties(data: collection),
+      );
+      await map.addFillLayer(
+        'picker-existing-areas',
+        'picker-existing-fill',
+        const FillLayerProperties(
+          fillColor: '#1B4332',
+          fillOpacity: 0.14,
+        ),
+      );
+      await map.addLineLayer(
+        'picker-existing-areas',
+        'picker-existing-line',
+        const LineLayerProperties(
+          lineColor: '#1B4332',
+          lineWidth: 2,
+          lineOpacity: 0.85,
+        ),
+      );
+    } catch (_) {
+      // Context only; failing to draw existing outlines must not block saving.
+    }
   }
 
   Widget _buildPanel(ThemeData theme) {
@@ -380,6 +445,7 @@ class _AreaPickerPageState extends State<AreaPickerPage> {
               const SizedBox(height: 10),
               _EstimateLine(
                 estimate: estimate,
+                bounds: _frameBounds,
                 theme: theme,
                 editing: widget.editing != null,
               ),
@@ -488,17 +554,34 @@ class _AreaPickerPageState extends State<AreaPickerPage> {
 class _EstimateLine extends StatelessWidget {
   const _EstimateLine({
     required this.estimate,
+    required this.bounds,
     required this.theme,
     this.editing = false,
   });
 
   final SizeEstimate? estimate;
+  final LatLngBounds? bounds;
   final ThemeData theme;
   final bool editing;
+
+  String? _dimensionsLabel() {
+    final box = bounds;
+    if (box == null) return null;
+    final midLat = (box.southwest.latitude + box.northeast.latitude) / 2;
+    final heightKm =
+        (box.northeast.latitude - box.southwest.latitude).abs() * 111.32;
+    final widthKm = (box.northeast.longitude - box.southwest.longitude).abs() *
+        111.32 *
+        math.cos(midLat * math.pi / 180).abs();
+    String fmt(double km) =>
+        km < 10 ? km.toStringAsFixed(1) : km.round().toString();
+    return '${fmt(widthKm)} × ${fmt(heightKm)} km';
+  }
 
   @override
   Widget build(BuildContext context) {
     final value = estimate;
+    final dims = _dimensionsLabel();
     if (value == null) {
       return Text('Measuring the area…', style: theme.textTheme.bodyMedium);
     }
@@ -526,7 +609,8 @@ class _EstimateLine extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'About ${formatBytes(value.newBytes)} to download',
+          'About ${formatBytes(value.newBytes)} to download'
+          '${dims != null ? ' · $dims' : ''}',
           style: theme.textTheme.titleMedium,
         ),
         if (value.overlapsExisting)

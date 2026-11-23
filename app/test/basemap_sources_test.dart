@@ -225,6 +225,16 @@ void main() {
       expect(sources, containsAll(['on-ortho', 'sentinel2']));
     });
 
+    test('caps Sentinel-2 to z7 when provincial ortho encloses the area', () {
+      final ontario = box(-92.0, 49.0, -91.0, 50.0);
+      final pruned = json.decode(
+        pruneStyleToArea(readStyle('satellite'), ontario),
+      ) as Map<String, dynamic>;
+      final sentinel =
+          (pruned['sources'] as Map)['sentinel2'] as Map<String, dynamic>;
+      expect(sentinel['maxzoom'], 7);
+    });
+
     test('the pruned style is still a valid style document', () {
       final area = box(-94.0, 50.0, -93.0, 51.0);
       final pruned = json.decode(pruneStyleToArea(readStyle('hybrid'), area))

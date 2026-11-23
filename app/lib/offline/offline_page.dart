@@ -258,9 +258,19 @@ class _OfflinePageState extends State<OfflinePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Downloading ${_areaDownloadName ?? 'area'}',
-                    style: theme.textTheme.titleMedium,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Downloading ${_areaDownloadName ?? 'area'}',
+                          style: theme.textTheme.titleMedium,
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _areaStore.cancelActiveDownload,
+                        child: const Text('Cancel'),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 10),
                   LinearProgressIndicator(
@@ -478,6 +488,10 @@ class _OfflinePageState extends State<OfflinePage> {
       if (!mounted) return;
       await _loadAreas();
       _showMessage('${area.name} finished downloading.');
+    } on DownloadCancelled {
+      if (!mounted) return;
+      await _loadAreas();
+      _showMessage('Download cancelled.');
     } catch (error) {
       if (!mounted) return;
       await _loadAreas();
@@ -519,6 +533,10 @@ class _OfflinePageState extends State<OfflinePage> {
       if (!mounted) return;
       await _loadAreas();
       _showMessage('${request.name} updated.');
+    } on DownloadCancelled {
+      if (!mounted) return;
+      await _loadAreas();
+      _showMessage('Update cancelled. Previous area kept.');
     } catch (error) {
       if (!mounted) return;
       await _loadAreas();
@@ -568,6 +586,14 @@ class _OfflinePageState extends State<OfflinePage> {
       });
       await _loadAreas();
       _showMessage('${request.name} saved for offline use.');
+    } on DownloadCancelled {
+      if (!mounted) return;
+      setState(() {
+        _areaProgress = null;
+        _areaDownloadName = null;
+      });
+      await _loadAreas();
+      _showMessage('Download cancelled.');
     } catch (error) {
       if (!mounted) return;
       setState(() {

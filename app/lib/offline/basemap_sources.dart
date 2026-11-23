@@ -120,6 +120,14 @@ LatLngBounds? _boundsFrom(Object? raw) {
   );
 }
 
+bool _contains(LatLngBounds? outer, LatLngBounds inner) {
+  if (outer == null) return false;
+  return outer.southwest.latitude <= inner.southwest.latitude &&
+      outer.northeast.latitude >= inner.northeast.latitude &&
+      outer.southwest.longitude <= inner.southwest.longitude &&
+      outer.northeast.longitude >= inner.northeast.longitude;
+}
+
 /// Rewrites a style so it only names the sources that reach [area], and drops
 /// the layers that used them.
 ///
@@ -137,7 +145,8 @@ String pruneStyleToArea(String styleJson, LatLngBounds area) {
   final style = json.decode(styleJson) as Map<String, dynamic>;
   final sources = (style['sources'] as Map<String, dynamic>?) ?? const {};
   final keep = <String, dynamic>{};
-  for (final spec in sourceSpecsFromStyle(styleJson)) {
+  final specs = sourceSpecsFromStyle(styleJson);
+  for (final spec in specs) {
     if (spec.covers(area)) keep[spec.id] = sources[spec.id];
   }
   // Non-tile sources, such as the flat background, carry no bounds and cost
@@ -148,6 +157,21 @@ String pruneStyleToArea(String styleJson, LatLngBounds area) {
       keep[id] = source;
     }
   });
+
+  // Provincial orthophotography starts at zoom 8 and sits opaque over
+  // Sentinel-2, so z8–14 Sentinel-2 tiles are invisible anywhere provincial
+  // imagery fully encloses the area. Cap Sentinel-2 to z7 there so we do not
+  // fetch thousands of hidden tiles.
+  if (keep['sentinel2'] case final Map<String, dynamic> sentinel) {
+    final coveredByOrtho = specs.any(
+      (spec) =>
+          (spec.id == 'on-ortho' || spec.id == 'qc-ortho') &&
+          _contains(spec.bounds, area),
+    );
+    if (coveredByOrtho) {
+      keep['sentinel2'] = {...sentinel, 'maxzoom': 7};
+    }
+  }
 
   final layers = (style['layers'] as List<dynamic>? ?? const [])
       .where((layer) {
