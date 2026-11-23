@@ -23,6 +23,7 @@ void main() {
         'sentinel2',
         'qc-ortho',
         'on-ortho',
+        'terrarium',
       });
       final sentinel = specs.firstWhere((s) => s.id == 'sentinel2');
       expect(sentinel.maxZoom, 14);

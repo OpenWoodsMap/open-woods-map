@@ -20,6 +20,7 @@ const Map<String, int> _averageTileBytes = {
   'on-ortho': 23 * 1024,
   'qc-ortho': 20 * 1024,
   'ne2_shaded': 8 * 1024,
+  'terrarium': 45 * 1024,
 };
 
 /// Used when a style names a source this table has never seen. Deliberately on
@@ -64,7 +65,7 @@ List<TileSourceSpec> sourceSpecsFromStyle(String styleJson) {
   sources.forEach((id, raw) {
     final source = raw as Map<String, dynamic>;
     final type = source['type'] as String?;
-    if (type != 'raster' && type != 'vector') return;
+    if (type != 'raster' && type != 'vector' && type != 'raster-dem') return;
     specs.add(
       TileSourceSpec(
         id: id,
@@ -143,7 +144,9 @@ String pruneStyleToArea(String styleJson, LatLngBounds area) {
   // nothing to keep.
   sources.forEach((id, source) {
     final type = (source as Map<String, dynamic>)['type'];
-    if (type != 'raster' && type != 'vector') keep[id] = source;
+    if (type != 'raster' && type != 'vector' && type != 'raster-dem') {
+      keep[id] = source;
+    }
   });
 
   final layers = (style['layers'] as List<dynamic>? ?? const [])

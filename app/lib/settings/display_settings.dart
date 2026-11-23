@@ -103,12 +103,14 @@ class DisplaySettings extends ChangeNotifier {
     bool showNames = showNamesFallback,
     bool showPlaceNames = showPlaceNamesFallback,
     bool showHillshade = showHillshadeFallback,
+    bool showContours = showContoursFallback,
   })  : _markerStyle = markerStyle ?? WaypointMarkerStyle.fallback,
         _markerSize = markerSize ?? WaypointMarkerSize.fallback,
         _lockNorth = lockNorth,
         _showNames = showNames,
         _showPlaceNames = showPlaceNames,
-        _showHillshade = showHillshade;
+        _showHillshade = showHillshade,
+        _showContours = showContours;
 
   /// Rotation stays on unless asked otherwise, because turning the map to match
   /// what is in front of you is how most people read one, and a build that
@@ -132,6 +134,10 @@ class DisplaySettings extends ChangeNotifier {
   /// about what works without a signal.
   static const bool showHillshadeFallback = false;
 
+  /// Off by default: NRCan Toporama contours are rendered on demand via WMS
+  /// and are online-only.
+  static const bool showContoursFallback = false;
+
   /// Only a non-default choice is written, and the key is removed when the user
   /// goes back to the default. Same reason the overlay controller stores only
   /// the layers that are switched off: a preference written by this build must
@@ -144,6 +150,7 @@ class DisplaySettings extends ChangeNotifier {
   static const _showNamesKey = 'waypoint.show_names';
   static const _showPlaceNamesKey = 'map.show_place_names';
   static const _showHillshadeKey = 'map.show_hillshade';
+  static const _showContoursKey = 'map.show_contours';
 
   WaypointMarkerStyle _markerStyle;
   WaypointMarkerSize _markerSize;
@@ -151,6 +158,7 @@ class DisplaySettings extends ChangeNotifier {
   bool _showNames;
   bool _showPlaceNames;
   bool _showHillshade;
+  bool _showContours;
 
   WaypointMarkerStyle get markerStyle => _markerStyle;
   WaypointMarkerSize get markerSize => _markerSize;
@@ -166,6 +174,9 @@ class DisplaySettings extends ChangeNotifier {
 
   /// Whether 2D terrain relief shading is drawn over the basemap.
   bool get showHillshade => _showHillshade;
+
+  /// Whether NRCan Toporama contour lines are drawn over the basemap.
+  bool get showContours => _showContours;
 
   /// Must be awaited before the map draws its waypoint layers, because they are
   /// built from these values and loading afterwards would draw the markers once
@@ -183,6 +194,8 @@ class DisplaySettings extends ChangeNotifier {
         prefs.getBool(_showPlaceNamesKey) ?? showPlaceNamesFallback;
     _showHillshade =
         prefs.getBool(_showHillshadeKey) ?? showHillshadeFallback;
+    _showContours =
+        prefs.getBool(_showContoursKey) ?? showContoursFallback;
     notifyListeners();
   }
 
@@ -226,6 +239,13 @@ class DisplaySettings extends ChangeNotifier {
     _showHillshade = value;
     notifyListeners();
     await _storeBool(_showHillshadeKey, value, showHillshadeFallback);
+  }
+
+  Future<void> setShowContours(bool value) async {
+    if (value == _showContours) return;
+    _showContours = value;
+    notifyListeners();
+    await _storeBool(_showContoursKey, value, showContoursFallback);
   }
 
   Future<void> _storeBool(String key, bool value, bool fallback) async {

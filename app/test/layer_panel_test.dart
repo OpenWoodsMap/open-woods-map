@@ -333,18 +333,5 @@ void main() {
       await tester.pumpAndSettle();
       expect(display.showPlaceNames, isTrue);
     });
-
-    testWidgets('hillshade starts off and toggles through DisplaySettings',
-        (tester) async {
-      final display = await pumpWith(tester, placeNameCredit: credit);
-      expect(display.showHillshade, isFalse);
-      await tester.scrollUntilVisible(
-        find.text('Terrain shading (hillshade)'),
-        200,
-      );
-      await tester.tap(find.text('Terrain shading (hillshade)'));
-      await tester.pumpAndSettle();
-      expect(display.showHillshade, isTrue);
-    });
   });
 }

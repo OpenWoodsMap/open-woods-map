@@ -783,13 +783,14 @@ because no Land Info card cites a label and MapLibre's Android ⓘ dialog ignore
 the attribution of a GeoJSON source. They are points, never areas, for the
 same reason as above.
 
-## Elevation / terrain shading (hillshade)
+## Elevation, terrain shading & contour lines
 
 | Layer | Source | Notes |
 |-------|--------|-------|
-| Hillshade | [Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) (Mapzen / AWS Open Data, Terrarium PNG encoding) | Streamed on demand when *Terrain shading (hillshade)* is switched on in Map layers; off by default, online-only, maxzoom 14 |
+| Hillshade | [Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) (Mapzen / AWS Open Data, Terrarium PNG encoding) | Toggled from the Basemap sheet (off by default, maxzoom 14). Included in saved Satellite and Hybrid offline areas; streamed on Streets |
+| Contour lines | [NRCan Toporama](https://maps.geogratis.gc.ca/wms/toporama_en) (`hypsography` WMS layer) | Toggled from the Basemap sheet (off by default). Online-only transparent WMS overlay; not bulk-downloaded into offline areas |
 
-**License:** Source-specific open licences compiled in [Tilezen attribution](https://github.com/tilezen/joerd/blob/master/docs/attribution.md) — in Canada, primarily [OGL–Canada](https://open.canada.ca/en/open-government-licence-canada) and USGS public domain. Credited on the hillshade switch in Map layers.
+**Licenses:** Terrarium tiles use source-specific open licences compiled in [Tilezen attribution](https://github.com/tilezen/joerd/blob/master/docs/attribution.md) — in Canada, primarily [OGL–Canada](https://open.canada.ca/en/open-government-licence-canada) and USGS public domain. NRCan Toporama is licensed under [OGL–Canada](https://open.canada.ca/en/open-government-licence-canada). Both are credited on their switches in the Basemap sheet.
 
 ### It is not a road network, and the UI must never suggest it is
 

@@ -25,10 +25,12 @@ each feature does, and where it stops.
   name, so each is a label, never an outline: where the name stops is not in
   the source and the map does not guess. On by default, with a switch at the
   bottom of Map layers that *Hide all* leaves alone
-- **Terrain shading (hillshade):** optional 2D relief shading over the basemap
-  from Mapzen / AWS Open Data Terrarium elevation tiles. Off by default in Map
-  layers (under *Relief*) because it streams tiles over the network and is not
-  bundled into saved offline areas; it degrades silently when offline
+- **Terrain shading (hillshade) and contour lines:** optional 2D relief shading
+  (Mapzen / AWS Open Data Terrarium elevation tiles) and official Canadian
+  elevation contour lines (NRCan Toporama WMS, OGL–Canada), both toggled from
+  the Basemap sheet and off by default. Hillshade DEM tiles are included in
+  saved Satellite and Hybrid offline areas; contour lines are online-only and
+  degrade silently without a signal
 - **Closures outrank tenure:** Crown game preserves, National Wildlife Areas,
   Migratory Bird Sanctuaries and National Defence property are drawn over Crown
   land and reported first, since hunting there is prohibited whatever the tenure

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:open_woods_map/map/basemap.dart';
 import 'package:open_woods_map/map/basemap_panel.dart';
+import 'package:open_woods_map/settings/display_settings.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   var myMapsTaps = 0;
@@ -161,6 +163,42 @@ void main() {
       await pumpPanel(tester, const Size(1080, 2400),
           customCount: 2, customDrawn: 2);
       expect(find.text('2 drawn over the basemap'), findsOneWidget);
+    });
+  });
+
+  group('terrain overlays', () {
+    setUp(() => SharedPreferences.setMockInitialValues({}));
+
+    testWidgets('hillshade and contours start off and toggle live',
+        (tester) async {
+      final display = DisplaySettings();
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BasemapPanel(
+              selected: BasemapKind.hybrid,
+              onPick: (_) {},
+              onMyMaps: () {},
+              display: display,
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(display.showHillshade, isFalse);
+      expect(display.showContours, isFalse);
+
+      await tester.tap(find.text('Terrain shading (hillshade)'));
+      await tester.pumpAndSettle();
+      expect(display.showHillshade, isTrue);
+
+      await tester.tap(find.text('Contour lines (Canada)'));
+      await tester.pumpAndSettle();
+      expect(display.showContours, isTrue);
     });
   });
 }

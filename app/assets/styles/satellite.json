@@ -33,6 +33,15 @@
       "bounds": [-95.3, 41.6, -74.2, 57.0],
       "minzoom": 8,
       "maxzoom": 19
+    },
+    "terrarium": {
+      "type": "raster-dem",
+      "tiles": [
+        "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
+      ],
+      "tileSize": 256,
+      "encoding": "terrarium",
+      "maxzoom": 14
     }
   },
   "layers": [

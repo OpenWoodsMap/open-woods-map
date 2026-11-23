@@ -250,10 +250,11 @@ class _MapShellState extends State<MapShell> {
   /// refresh without rebuilding the whole map shell on every 5 m GPS fix.
   final _recordingTick = ValueNotifier<int>(0);
 
-  /// The place-name and hillshade settings as last applied, so unrelated
-  /// display changes do not redraw thousands of labels or reload DEM tiles.
+  /// The place-name, hillshade and contour settings as last applied, so
+  /// unrelated display changes do not redraw labels or reload tiles.
   late var _placeNamesDrawn = _display.showPlaceNames;
   late var _hillshadeDrawn = _display.showHillshade;
+  late var _contoursDrawn = _display.showContours;
 
   void _onOverlaysChanged() {
     final hidden = _overlays.allHidden;
@@ -296,6 +297,10 @@ class _MapShellState extends State<MapShell> {
     if (_display.showHillshade != _hillshadeDrawn) {
       _hillshadeDrawn = _display.showHillshade;
       _syncHillshade();
+    }
+    if (_display.showContours != _contoursDrawn) {
+      _contoursDrawn = _display.showContours;
+      _syncContours();
     }
     // Saved tracks come along with the waypoints; the followed one is drawn
     // from its own source and would otherwise keep its old arrow size until
@@ -850,6 +855,7 @@ class _MapShellState extends State<MapShell> {
                 // give. See [_syncCustomMaps].
                 await _syncCustomMaps();
                 await _syncHillshade();
+                await _syncContours();
                 await _attachLayers();
                 await _syncPlaceLabels();
                 await _syncWaypointSource(rebuildLayers: true);
@@ -1186,6 +1192,7 @@ class _MapShellState extends State<MapShell> {
         child: BasemapPanel(
           selected: _basemap,
           onPick: (kind) => Navigator.pop(context, kind),
+          display: _display,
           customCount: _customMaps.maps.length,
           customDrawn: _customMaps.drawn.length,
           onMyMaps: () {
@@ -1755,6 +1762,7 @@ class _MapShellState extends State<MapShell> {
     }
   }
 
+  static const _hillshadeBundledSource = 'terrarium';
   static const _hillshadeSource = 'owm-hillshade-dem';
   static const _hillshadeLayer = 'owm-hillshade';
   static const _terrariumTiles =
@@ -1769,25 +1777,35 @@ class _MapShellState extends State<MapShell> {
   Future<void> _drawHillshade() async {
     final map = _map;
     if (!_styleReady || map == null) return;
+    // Satellite and Hybrid declare `terrarium` in their bundled style JSON so
+    // saved offline areas include DEM tiles; Streets and Offline add it on
+    // demand.
+    final usesBundled =
+        _basemap == BasemapKind.satellite || _basemap == BasemapKind.hybrid;
     try {
       await map.removeLayer(_hillshadeLayer);
     } catch (_) {}
-    try {
-      await map.removeSource(_hillshadeSource);
-    } catch (_) {}
+    if (!usesBundled) {
+      try {
+        await map.removeSource(_hillshadeSource);
+      } catch (_) {}
+    }
     if (!_display.showHillshade) return;
+    final sourceId = usesBundled ? _hillshadeBundledSource : _hillshadeSource;
     try {
-      await map.addSource(
-        _hillshadeSource,
-        const RasterDemSourceProperties(
-          tiles: [_terrariumTiles],
-          tileSize: 256,
-          maxzoom: 14,
-          encoding: 'terrarium',
-        ),
-      );
+      if (!usesBundled) {
+        await map.addSource(
+          _hillshadeSource,
+          const RasterDemSourceProperties(
+            tiles: [_terrariumTiles],
+            tileSize: 256,
+            maxzoom: 14,
+            encoding: 'terrarium',
+          ),
+        );
+      }
       await map.addHillshadeLayer(
-        _hillshadeSource,
+        sourceId,
         _hillshadeLayer,
         const HillshadeLayerProperties(
           hillshadeExaggeration: 0.55,
@@ -1801,6 +1819,47 @@ class _MapShellState extends State<MapShell> {
       );
     } catch (error) {
       _toast('Terrain shading could not be drawn: $error');
+    }
+  }
+
+  static const _contoursSource = 'owm-contours-wms';
+  static const _contoursLayer = 'owm-contours';
+  static const _nrcanContoursWms =
+      'https://maps.geogratis.gc.ca/wms/toporama_en?'
+      'SERVICE=WMS&REQUEST=GetMap&VERSION=1.3.0&LAYERS=hypsography&STYLES=&'
+      'CRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=256&HEIGHT=256&'
+      'FORMAT=image/png&TRANSPARENT=TRUE';
+  Future<void> _contoursQueue = Future.value();
+
+  Future<void> _syncContours() =>
+      _contoursQueue = _contoursQueue.then((_) => _drawContours());
+
+  Future<void> _drawContours() async {
+    final map = _map;
+    if (!_styleReady || map == null) return;
+    try {
+      await map.removeLayer(_contoursLayer);
+    } catch (_) {}
+    try {
+      await map.removeSource(_contoursSource);
+    } catch (_) {}
+    if (!_display.showContours) return;
+    try {
+      await map.addSource(
+        _contoursSource,
+        const RasterSourceProperties(
+          tiles: [_nrcanContoursWms],
+          tileSize: 256,
+        ),
+      );
+      await map.addRasterLayer(
+        _contoursSource,
+        _contoursLayer,
+        const RasterLayerProperties(rasterOpacity: 0.85),
+        belowLayerId: await _lowestAppLayer(map),
+      );
+    } catch (error) {
+      _toast('Contour lines could not be drawn: $error');
     }
   }
 
@@ -1901,6 +1960,7 @@ class _MapShellState extends State<MapShell> {
           name.startsWith('owm-line-') ||
           name.startsWith('owm-circle-') ||
           name == _hillshadeLayer ||
+          name == _contoursLayer ||
           name == _placeLabelLayer) {
         continue;
       }
