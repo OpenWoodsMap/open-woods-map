@@ -16,12 +16,11 @@ extension BasemapKindX on BasemapKind {
       };
 
   String get shortHint => switch (this) {
-        BasemapKind.offline => 'Works offline · no street detail',
-        BasemapKind.streets => 'OpenFreeMap · needs network',
-        BasemapKind.satellite =>
-          'ON/QC aerial photos · Sentinel-2 elsewhere · needs network',
+        BasemapKind.offline => 'Plain background · always works offline',
+        BasemapKind.streets => 'Roads, trails & water · OpenFreeMap',
+        BasemapKind.satellite => 'ON/QC aerial photos · Sentinel-2 elsewhere',
         BasemapKind.hybrid =>
-          'Aerial photos with road, water and place names · needs network',
+          'Aerial photos with roads, water & place names · OpenFreeMap',
       };
 
   IconData get icon => switch (this) {
@@ -34,22 +33,15 @@ extension BasemapKindX on BasemapKind {
         BasemapKind.hybrid => Icons.satellite_outlined,
       };
 
-  /// Streets use the OpenFreeMap hosted style; satellite and hybrid are local
-  /// style JSON that stacks provincial orthophotography over global Sentinel-2,
-  /// with hybrid adding OpenFreeMap's labels on top.
-  String? get remoteStyleUrl => switch (this) {
-        BasemapKind.streets => 'https://tiles.openfreemap.org/styles/liberty',
-        BasemapKind.offline ||
-        BasemapKind.satellite ||
-        BasemapKind.hybrid =>
-          null,
-      };
+  /// All basemaps now ship bundled style JSON so saved offline areas include
+  /// the terrain DEM source on Streets as well as Satellite and Hybrid.
+  String? get remoteStyleUrl => null;
 
   String? get assetStylePath => switch (this) {
         BasemapKind.offline => 'assets/styles/offline.json',
+        BasemapKind.streets => 'assets/styles/streets.json',
         BasemapKind.satellite => 'assets/styles/satellite.json',
         BasemapKind.hybrid => 'assets/styles/hybrid.json',
-        BasemapKind.streets => null,
       };
 
   /// Whether an area of this basemap can be saved for offline use.

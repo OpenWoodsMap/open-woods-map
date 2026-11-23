@@ -787,7 +787,7 @@ same reason as above.
 
 | Layer | Source | Notes |
 |-------|--------|-------|
-| Hillshade | [Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) (Mapzen / AWS Open Data, Terrarium PNG encoding) | Toggled from the Basemap sheet (off by default, maxzoom 14). Included in saved Satellite and Hybrid offline areas; streamed on Streets |
+| Hillshade | [Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) (Mapzen / AWS Open Data, Terrarium PNG encoding) | Toggled from the Basemap sheet (off by default, maxzoom 14). Included in saved Streets, Satellite and Hybrid offline areas |
 | Contour lines | [NRCan Toporama](https://maps.geogratis.gc.ca/wms/toporama_en) (`hypsography` WMS layer) | Toggled from the Basemap sheet (off by default). Online-only transparent WMS overlay; not bulk-downloaded into offline areas |
 
 **Licenses:** Terrarium tiles use source-specific open licences compiled in [Tilezen attribution](https://github.com/tilezen/joerd/blob/master/docs/attribution.md) — in Canada, primarily [OGL–Canada](https://open.canada.ca/en/open-government-licence-canada) and USGS public domain. NRCan Toporama is licensed under [OGL–Canada](https://open.canada.ca/en/open-government-licence-canada). Both are credited on their switches in the Basemap sheet.

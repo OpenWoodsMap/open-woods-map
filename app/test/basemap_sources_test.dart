@@ -54,7 +54,7 @@ void main() {
     });
 
     test('every source carries a measured tile weight', () {
-      for (final name in ['satellite', 'hybrid']) {
+      for (final name in ['streets', 'satellite', 'hybrid']) {
         for (final spec in sourceSpecsFromStyle(readStyle(name))) {
           expect(
             spec.averageTileBytes,

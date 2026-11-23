@@ -332,6 +332,7 @@ class _MapShellState extends State<MapShell> {
       // initialisation.
       final launchFix = _resolveLaunchLocation();
       final offline = await rootBundle.loadString('assets/styles/offline.json');
+      final streets = await rootBundle.loadString('assets/styles/streets.json');
       final satellite = await rootBundle.loadString(
         'assets/styles/satellite.json',
       );
@@ -357,6 +358,7 @@ class _MapShellState extends State<MapShell> {
       if (!mounted) return;
       setState(() {
         _styleCache[BasemapKind.offline] = offline;
+        _styleCache[BasemapKind.streets] = streets;
         _styleCache[BasemapKind.satellite] = satellite;
         _styleCache[BasemapKind.hybrid] = hybrid;
         _provinces = provinces;
@@ -562,6 +564,7 @@ class _MapShellState extends State<MapShell> {
 
   bool get _stylesReady =>
       _styleCache.containsKey(BasemapKind.offline) &&
+      _styleCache.containsKey(BasemapKind.streets) &&
       _styleCache.containsKey(BasemapKind.satellite) &&
       _styleCache.containsKey(BasemapKind.hybrid);
 
@@ -1777,11 +1780,9 @@ class _MapShellState extends State<MapShell> {
   Future<void> _drawHillshade() async {
     final map = _map;
     if (!_styleReady || map == null) return;
-    // Satellite and Hybrid declare `terrarium` in their bundled style JSON so
-    // saved offline areas include DEM tiles; Streets and Offline add it on
-    // demand.
-    final usesBundled =
-        _basemap == BasemapKind.satellite || _basemap == BasemapKind.hybrid;
+    // Streets, Satellite and Hybrid declare `terrarium` in their bundled style
+    // JSON so saved offline areas include DEM tiles; Offline adds it on demand.
+    final usesBundled = _basemap != BasemapKind.offline;
     try {
       await map.removeLayer(_hillshadeLayer);
     } catch (_) {}

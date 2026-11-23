@@ -29,8 +29,8 @@ each feature does, and where it stops.
   (Mapzen / AWS Open Data Terrarium elevation tiles) and official Canadian
   elevation contour lines (NRCan Toporama WMS, OGL–Canada), both toggled from
   the Basemap sheet and off by default. Hillshade DEM tiles are included in
-  saved Satellite and Hybrid offline areas; contour lines are online-only and
-  degrade silently without a signal
+  saved Streets, Satellite and Hybrid offline areas; contour lines are
+  online-only and degrade silently without a signal
 - **Closures outrank tenure:** Crown game preserves, National Wildlife Areas,
   Migratory Bird Sanctuaries and National Defence property are drawn over Crown
   land and reported first, since hunting there is prohibited whatever the tenure

@@ -49,8 +49,8 @@ class BasemapPanel extends StatelessWidget {
               const ListTile(
                 title: Text('Basemap'),
                 subtitle: Text(
-                  'Streets and satellite need network. '
-                  'Offline works without tiles.',
+                  'Save an area in Offline packs to use Streets, Satellite or '
+                  'Hybrid without signal.',
                 ),
               ),
               Flexible(
@@ -63,18 +63,36 @@ class BasemapPanel extends StatelessWidget {
                         title: Text(kind.label),
                         subtitle: Text(kind.shortHint),
                         selected: kind == selected,
+                        trailing: kind == selected
+                            ? Icon(
+                                Icons.check,
+                                color: Theme.of(context).colorScheme.primary,
+                              )
+                            : null,
                         onTap: () => onPick(kind),
                       ),
                     if (display case final display?) ...[
                       const Divider(height: 1),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 2),
+                        child: Text(
+                          'TERRAIN OVERLAYS',
+                          style:
+                              Theme.of(context).textTheme.labelLarge?.copyWith(
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                    letterSpacing: 0.6,
+                                  ),
+                        ),
+                      ),
                       CheckboxListTile(
                         dense: true,
                         controlAffinity: ListTileControlAffinity.leading,
                         title: const Text('Terrain shading (hillshade)'),
                         subtitle: const Text(
-                          'Shades slopes and ridges. Saved in Satellite & '
-                          'Hybrid offline areas; streams on Streets. Elevation '
-                          'data © Mapzen / AWS Open Data (OGL–Canada, USGS).',
+                          'Shades slopes and ridges. Included in saved '
+                          'offline areas. Elevation data © Mapzen / AWS Open '
+                          'Data (OGL–Canada, USGS).',
                         ),
                         value: display.showHillshade,
                         onChanged: (value) =>
@@ -85,8 +103,8 @@ class BasemapPanel extends StatelessWidget {
                         controlAffinity: ListTileControlAffinity.leading,
                         title: const Text('Contour lines (Canada)'),
                         subtitle: const Text(
-                          'Official elevation contours (online only, not saved '
-                          'offline). NRCan Toporama, OGL–Canada.',
+                          'Official elevation contours · online only. NRCan '
+                          'Toporama, OGL–Canada.',
                         ),
                         value: display.showContours,
                         onChanged: (value) =>

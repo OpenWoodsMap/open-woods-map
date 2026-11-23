@@ -93,7 +93,8 @@ void main() {
   // person had already picked. Removing that left one copy, and it is the copy
   // that has to survive: "needs network" is what explains a blank satellite view
   // out of signal, and it is only readable here.
-  testWidgets('each basemap says what it is and what it needs', (tester) async {
+  testWidgets('each basemap says what it is and the header explains offline',
+      (tester) async {
     await pumpPanel(tester, const Size(1080, 2400));
 
     for (final kind in BasemapKind.values) {
@@ -101,13 +102,9 @@ void main() {
           reason: '${kind.label} should explain itself');
     }
     expect(
-      find.textContaining('needs network'),
-      findsNWidgets(
-        BasemapKind.values
-            .where((kind) => kind.shortHint.contains('needs network'))
-            .length,
-      ),
-      reason: 'the basemaps that need a connection have to say so somewhere',
+      find.textContaining('Offline packs'),
+      findsOneWidget,
+      reason: 'the sheet should explain how online basemaps work offline',
     );
   });
 

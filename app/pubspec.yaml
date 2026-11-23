@@ -65,6 +65,7 @@ flutter:
   # release. Keep in sync with scripts/sync_assets.*
   assets:
     - assets/styles/offline.json
+    - assets/styles/streets.json
     - assets/styles/satellite.json
     - assets/styles/hybrid.json
     - assets/data/provinces.json
