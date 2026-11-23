@@ -64,6 +64,7 @@ class _OfflinePageState extends State<OfflinePage> {
   AreaDownloadProgress? _areaProgress;
   String? _areaDownloadName;
   final Set<int> _areaBusy = {};
+  var _clearingCache = false;
 
   @override
   void initState() {
@@ -202,11 +203,10 @@ class _OfflinePageState extends State<OfflinePage> {
         ),
         const SizedBox(height: 8),
         Text(
-          'To test offline before a trip: turn on Airplane Mode (and Wi-Fi '
-          'off), then pan and zoom inside your saved area. Keep in mind that '
-          'spots you just looked at on Wi-Fi stay in the temporary cache for '
-          'a while, so zoom into an unvisited part of the saved box to be '
-          'sure the downloaded tiles are what you are seeing.',
+          'To test offline before a trip: tap Clear temporary cache below, '
+          'turn on Airplane Mode (with Wi-Fi off), then pan and zoom inside '
+          'your saved area. Android’s own Clear cache button does not clear '
+          'map tiles.',
           style: theme.textTheme.bodySmall?.copyWith(
             color: Colors.black54,
             height: 1.35,
@@ -215,20 +215,39 @@ class _OfflinePageState extends State<OfflinePage> {
         const SizedBox(height: 14),
         if (disk != null)
           Card(
-            child: ListTile(
-              leading: const Icon(Icons.sd_storage_outlined),
-              title: Text('${formatBytes(disk)} of map tiles on this device'),
-              subtitle: Text(
-                _areas.isEmpty
-                    ? 'Tiles the app has looked at recently, kept in a '
-                        'temporary cache that clears itself.'
-                    : '${_areas.length} saved '
-                        '${_areas.length == 1 ? 'area' : 'areas'}, plus '
-                        'recently viewed tiles. Areas that overlap share their '
-                        'tiles, so the sizes below can add up to more than '
-                        'this.',
-              ),
-              isThreeLine: _areas.isNotEmpty,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.sd_storage_outlined),
+                  title: Text('${formatBytes(disk)} of map tiles on this device'),
+                  subtitle: Text(
+                    _areas.isEmpty
+                        ? 'Tiles the app has looked at recently, kept in a '
+                            'temporary cache that clears itself.'
+                        : '${_areas.length} saved '
+                            '${_areas.length == 1 ? 'area' : 'areas'}, plus '
+                            'recently viewed tiles. Areas that overlap share '
+                            'their tiles, so the sizes below can add up to '
+                            'more than this.',
+                  ),
+                  isThreeLine: _areas.isNotEmpty,
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  child: TextButton.icon(
+                    onPressed: _clearingCache || _areaProgress != null
+                        ? null
+                        : _clearTemporaryCache,
+                    icon: const Icon(Icons.cleaning_services_outlined, size: 18),
+                    label: Text(
+                      _clearingCache
+                          ? 'Clearing temporary cache…'
+                          : 'Clear temporary cache',
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         if (_areaProgress != null) ...[
@@ -426,6 +445,21 @@ class _OfflinePageState extends State<OfflinePage> {
     } catch (error) {
       if (!mounted) return;
       _showMessage('Could not rename the area: $error');
+    }
+  }
+
+  Future<void> _clearTemporaryCache() async {
+    setState(() => _clearingCache = true);
+    try {
+      await _areaStore.clearTemporaryCache();
+      if (!mounted) return;
+      await _loadAreas();
+      _showMessage('Cleared temporary tile cache. Saved areas were kept.');
+    } catch (error) {
+      if (!mounted) return;
+      _showMessage('Could not clear temporary cache: $error');
+    } finally {
+      if (mounted) setState(() => _clearingCache = false);
     }
   }
 

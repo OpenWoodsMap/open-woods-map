@@ -435,6 +435,9 @@ class BasemapAreaStore {
     await clearAmbientCache();
   }
 
+  /// Drops recently viewed tiles while leaving every saved offline area intact.
+  Future<void> clearTemporaryCache() => clearAmbientCache();
+
   /// Releases the loopback server if nothing is downloading.
   ///
   /// Leaving the offline screen used to abandon the download outright: closing
