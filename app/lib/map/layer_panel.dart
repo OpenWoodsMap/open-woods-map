@@ -203,6 +203,27 @@ class LayerPanel extends StatelessWidget {
                             display.setShowPlaceNames(value ?? true),
                       ),
                     ],
+                    if (display case final display?) ...[
+                      _GroupHeader(
+                        title: 'Relief',
+                        ids: const [],
+                        controller: controller,
+                      ),
+                      CheckboxListTile(
+                        dense: true,
+                        contentPadding: _indent,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: const Text('Terrain shading (hillshade)'),
+                        subtitle: const Text(
+                          'Shades slopes and ridges. Needs network unless '
+                          'cached. Elevation data © Mapzen / AWS Open Data '
+                          '(OGL–Canada, USGS).',
+                        ),
+                        value: display.showHillshade,
+                        onChanged: (value) =>
+                            display.setShowHillshade(value ?? false),
+                      ),
+                    ],
                   ],
                 ),
               ),

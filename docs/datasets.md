@@ -783,6 +783,14 @@ because no Land Info card cites a label and MapLibre's Android ⓘ dialog ignore
 the attribution of a GeoJSON source. They are points, never areas, for the
 same reason as above.
 
+## Elevation / terrain shading (hillshade)
+
+| Layer | Source | Notes |
+|-------|--------|-------|
+| Hillshade | [Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) (Mapzen / AWS Open Data, Terrarium PNG encoding) | Streamed on demand when *Terrain shading (hillshade)* is switched on in Map layers; off by default, online-only, maxzoom 14 |
+
+**License:** Source-specific open licences compiled in [Tilezen attribution](https://github.com/tilezen/joerd/blob/master/docs/attribution.md) — in Canada, primarily [OGL–Canada](https://open.canada.ca/en/open-government-licence-canada) and USGS public domain. Credited on the hillshade switch in Map layers.
+
 ### It is not a road network, and the UI must never suggest it is
 
 CGNDB does contain named roads and trails. It contains them the way a lost and

@@ -102,11 +102,13 @@ class DisplaySettings extends ChangeNotifier {
     bool lockNorth = lockNorthFallback,
     bool showNames = showNamesFallback,
     bool showPlaceNames = showPlaceNamesFallback,
+    bool showHillshade = showHillshadeFallback,
   })  : _markerStyle = markerStyle ?? WaypointMarkerStyle.fallback,
         _markerSize = markerSize ?? WaypointMarkerSize.fallback,
         _lockNorth = lockNorth,
         _showNames = showNames,
-        _showPlaceNames = showPlaceNames;
+        _showPlaceNames = showPlaceNames,
+        _showHillshade = showHillshade;
 
   /// Rotation stays on unless asked otherwise, because turning the map to match
   /// what is in front of you is how most people read one, and a build that
@@ -125,6 +127,11 @@ class DisplaySettings extends ChangeNotifier {
   /// would think to go looking for a switch for something they have not seen.
   static const bool showPlaceNamesFallback = true;
 
+  /// Off by default: hillshade streams elevation tiles over the network and
+  /// is not saved with offline areas yet, so opting in keeps the map honest
+  /// about what works without a signal.
+  static const bool showHillshadeFallback = false;
+
   /// Only a non-default choice is written, and the key is removed when the user
   /// goes back to the default. Same reason the overlay controller stores only
   /// the layers that are switched off: a preference written by this build must
@@ -136,12 +143,14 @@ class DisplaySettings extends ChangeNotifier {
   static const _lockNorthKey = 'map.lock_north';
   static const _showNamesKey = 'waypoint.show_names';
   static const _showPlaceNamesKey = 'map.show_place_names';
+  static const _showHillshadeKey = 'map.show_hillshade';
 
   WaypointMarkerStyle _markerStyle;
   WaypointMarkerSize _markerSize;
   bool _lockNorth;
   bool _showNames;
   bool _showPlaceNames;
+  bool _showHillshade;
 
   WaypointMarkerStyle get markerStyle => _markerStyle;
   WaypointMarkerSize get markerSize => _markerSize;
@@ -154,6 +163,9 @@ class DisplaySettings extends ChangeNotifier {
 
   /// Whether hill, mountain and wetland names from the pack are on the map.
   bool get showPlaceNames => _showPlaceNames;
+
+  /// Whether 2D terrain relief shading is drawn over the basemap.
+  bool get showHillshade => _showHillshade;
 
   /// Must be awaited before the map draws its waypoint layers, because they are
   /// built from these values and loading afterwards would draw the markers once
@@ -169,6 +181,8 @@ class DisplaySettings extends ChangeNotifier {
     _showNames = prefs.getBool(_showNamesKey) ?? showNamesFallback;
     _showPlaceNames =
         prefs.getBool(_showPlaceNamesKey) ?? showPlaceNamesFallback;
+    _showHillshade =
+        prefs.getBool(_showHillshadeKey) ?? showHillshadeFallback;
     notifyListeners();
   }
 
@@ -205,6 +219,13 @@ class DisplaySettings extends ChangeNotifier {
     _showPlaceNames = value;
     notifyListeners();
     await _storeBool(_showPlaceNamesKey, value, showPlaceNamesFallback);
+  }
+
+  Future<void> setShowHillshade(bool value) async {
+    if (value == _showHillshade) return;
+    _showHillshade = value;
+    notifyListeners();
+    await _storeBool(_showHillshadeKey, value, showHillshadeFallback);
   }
 
   Future<void> _storeBool(String key, bool value, bool fallback) async {

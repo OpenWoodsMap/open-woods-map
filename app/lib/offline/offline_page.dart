@@ -200,6 +200,18 @@ class _OfflinePageState extends State<OfflinePage> {
           'nothing saved; it draws a plain background at any zoom.',
           style: TextStyle(height: 1.35),
         ),
+        const SizedBox(height: 8),
+        Text(
+          'To test offline before a trip: turn on Airplane Mode (and Wi-Fi '
+          'off), then pan and zoom inside your saved area. Keep in mind that '
+          'spots you just looked at on Wi-Fi stay in the temporary cache for '
+          'a while, so zoom into an unvisited part of the saved box to be '
+          'sure the downloaded tiles are what you are seeing.',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: Colors.black54,
+            height: 1.35,
+          ),
+        ),
         const SizedBox(height: 14),
         if (disk != null)
           Card(

@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="56dp"
+    android:height="56dp"
+    android:viewportWidth="56"
+    android:viewportHeight="56">
+  <!-- Subtle forward cone so heading is legible even at a glance -->
+  <path
+      android:fillAlpha="0.22"
+      android:fillColor="#1976D2"
+      android:pathData="M28,28 L16,4 A26,26 0 0,1 40,4 Z" />
+  <!-- Bold white-outlined directional arrow outside the location dot -->
+  <path
+      android:fillColor="#1976D2"
+      android:strokeColor="#FFFFFF"
+      android:strokeWidth="2.2"
+      android:strokeLineJoin="round"
+      android:pathData="M28,2.5 L35.5,14.5 L28,11.5 L20.5,14.5 Z" />
+</vector>

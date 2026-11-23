@@ -19,6 +19,7 @@ class RecordingBar extends StatefulWidget {
     required this.startedAt,
     required this.rejectedFixes,
     required this.onStop,
+    this.updates,
   });
 
   final List<TrackPoint> points;
@@ -33,6 +34,10 @@ class RecordingBar extends StatefulWidget {
   final int rejectedFixes;
   final VoidCallback onStop;
 
+  /// Optional notifier fired when [points] grows, so the map shell does not
+  /// have to rebuild its whole widget tree on every 5 m GPS fix.
+  final Listenable? updates;
+
   @override
   State<RecordingBar> createState() => _RecordingBarState();
 }
@@ -43,6 +48,7 @@ class _RecordingBarState extends State<RecordingBar> {
   @override
   void initState() {
     super.initState();
+    widget.updates?.addListener(_onUpdate);
     // Local to this bar rather than driven from the map shell, so a clock that
     // has to move every second does not rebuild the map with it.
     _tick = Timer.periodic(
@@ -52,7 +58,21 @@ class _RecordingBarState extends State<RecordingBar> {
   }
 
   @override
+  void didUpdateWidget(RecordingBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.updates != widget.updates) {
+      oldWidget.updates?.removeListener(_onUpdate);
+      widget.updates?.addListener(_onUpdate);
+    }
+  }
+
+  void _onUpdate() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   void dispose() {
+    widget.updates?.removeListener(_onUpdate);
     _tick?.cancel();
     super.dispose();
   }

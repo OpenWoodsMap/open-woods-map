@@ -245,20 +245,30 @@ class _MapShellState extends State<MapShell> {
   }
 
   var _layersAllHidden = false;
+  var _layersHiddenDismissed = false;
 
-  /// The place-name setting as last applied, so the many display changes that
-  /// have nothing to do with it do not redraw a few thousand labels.
+  /// Fired when a new point lands on [_activeTrack], so [RecordingBar] can
+  /// refresh without rebuilding the whole map shell on every 5 m GPS fix.
+  final _recordingTick = ValueNotifier<int>(0);
+
+  /// The place-name and hillshade settings as last applied, so unrelated
+  /// display changes do not redraw thousands of labels or reload DEM tiles.
   late var _placeNamesDrawn = _display.showPlaceNames;
+  late var _hillshadeDrawn = _display.showHillshade;
 
   void _onOverlaysChanged() {
     final hidden = _overlays.allHidden;
     if (!mounted || hidden == _layersAllHidden) return;
-    setState(() => _layersAllHidden = hidden);
+    setState(() {
+      _layersAllHidden = hidden;
+      if (!hidden) _layersHiddenDismissed = false;
+    });
   }
 
   @override
   void dispose() {
     _positionSubscription?.cancel();
+    _recordingTick.dispose();
     _display.removeListener(_onDisplayChanged);
     _visibility.removeListener(_onVisibilityChanged);
     _customMaps.removeListener(_onCustomMapsChanged);
@@ -287,10 +297,14 @@ class _MapShellState extends State<MapShell> {
       _placeNamesDrawn = _display.showPlaceNames;
       _syncPlaceLabels();
     }
+    if (_display.showHillshade != _hillshadeDrawn) {
+      _hillshadeDrawn = _display.showHillshade;
+      _syncHillshade();
+    }
     // Saved tracks come along with the waypoints; the followed one is drawn
     // from its own source and would otherwise keep its old arrow size until
     // following stopped.
-    _syncWaypointSource().then((_) => _syncFollowSource());
+    _syncWaypointSource(rebuildLayers: true).then((_) => _syncFollowSource());
     final map = _map;
     if (map != null && _geoJsonSources.contains('owm-active-track')) {
       _addActiveTrackMarkers(map);
@@ -662,8 +676,12 @@ class _MapShellState extends State<MapShell> {
             onPressed: _pickBasemap,
           ),
           IconButton(
-            tooltip: 'Layers',
-            icon: const Icon(Icons.layers),
+            tooltip: _layersAllHidden ? 'Layers (all hidden)' : 'Layers',
+            icon: Badge(
+              isLabelVisible: _layersAllHidden,
+              backgroundColor: const Color(0xFFFFB74D),
+              child: Icon(_layersAllHidden ? Icons.layers_clear : Icons.layers),
+            ),
             onPressed: _showLayers,
           ),
           IconButton(
@@ -835,9 +853,10 @@ class _MapShellState extends State<MapShell> {
                 // tenure fills rather than over the answer the app is here to
                 // give. See [_syncCustomMaps].
                 await _syncCustomMaps();
+                await _syncHillshade();
                 await _attachLayers();
                 await _syncPlaceLabels();
-                await _syncWaypointSource();
+                await _syncWaypointSource(rebuildLayers: true);
                 await _syncActiveTrackSource();
                 await _syncMeasureSource();
                 await _syncOfflineAreaSource();
@@ -874,6 +893,17 @@ class _MapShellState extends State<MapShell> {
               featureTapsTriggersMapClick: true,
               // Shown after the user grants location (see _goToMyLocation /
               // track recording). Compass mode draws a heading-aware arrow.
+              // High accuracy on Android uses the GPS chip while the map is on
+              // screen (default balanced mode relies on Wi-Fi/cell and stalls
+              // on rural roads) without running in the background.
+              locationEnginePlatforms:
+                  defaultTargetPlatform == TargetPlatform.android
+                      ? const LocationEnginePlatforms.android(
+                          enableHighAccuracy: true,
+                          interval: 2000,
+                          displacement: 5,
+                        )
+                      : LocationEnginePlatforms.defaultPlatform,
               myLocationEnabled: _myLocationEnabled,
               myLocationRenderMode: _myLocationEnabled
                   ? MyLocationRenderMode.compass
@@ -960,6 +990,7 @@ class _MapShellState extends State<MapShell> {
                       points: _activeTrack,
                       startedAt: started,
                       rejectedFixes: _rejectedFixes,
+                      updates: _recordingTick,
                       onStop: _stopTrackRecording,
                     ),
                   if (_recording && _followTrack != null)
@@ -995,11 +1026,15 @@ class _MapShellState extends State<MapShell> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // A bare map reads as ground with nothing on it, which is the
-                  // one thing it is not, so it says why it is bare for as long
-                  // as it is.
-                  if (_layersAllHidden) ...[
-                    _LayersHiddenChip(onShow: _overlays.showLayers),
+                  // A bare map reads as ground with nothing on it, so say why
+                  // it is bare — but let the user dismiss it to reclaim the
+                  // screen, leaving the badge on the Layers button as the cue.
+                  if (_layersAllHidden && !_layersHiddenDismissed) ...[
+                    _LayersHiddenChip(
+                      onShow: _overlays.showLayers,
+                      onDismiss: () =>
+                          setState(() => _layersHiddenDismissed = true),
+                    ),
                     if (_wind != null ||
                         _windLoading ||
                         _highlightedArea != null ||
@@ -1426,6 +1461,7 @@ class _MapShellState extends State<MapShell> {
     // difference between a gap you know about and one you do not.
     if (position.accuracy > _worstUsableAccuracyMetres) {
       _rejectedFixes++;
+      if (mounted) setState(() {});
       return;
     }
     final point = _trackPointFrom(position);
@@ -1434,7 +1470,7 @@ class _MapShellState extends State<MapShell> {
       return;
     }
     _activeTrack.add(point);
-    if (mounted) setState(() {});
+    _recordingTick.value++;
     _syncActiveTrackSource();
   }
 
@@ -1738,6 +1774,55 @@ class _MapShellState extends State<MapShell> {
     }
   }
 
+  static const _hillshadeSource = 'owm-hillshade-dem';
+  static const _hillshadeLayer = 'owm-hillshade';
+  static const _terrariumTiles =
+      'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
+  Future<void> _hillshadeQueue = Future.value();
+
+  /// Serialised like [_syncPlaceLabels] so a style load and a switch tap cannot
+  /// race to add the DEM source twice.
+  Future<void> _syncHillshade() =>
+      _hillshadeQueue = _hillshadeQueue.then((_) => _drawHillshade());
+
+  Future<void> _drawHillshade() async {
+    final map = _map;
+    if (!_styleReady || map == null) return;
+    try {
+      await map.removeLayer(_hillshadeLayer);
+    } catch (_) {}
+    try {
+      await map.removeSource(_hillshadeSource);
+    } catch (_) {}
+    if (!_display.showHillshade) return;
+    try {
+      await map.addSource(
+        _hillshadeSource,
+        const RasterDemSourceProperties(
+          tiles: [_terrariumTiles],
+          tileSize: 256,
+          maxzoom: 14,
+          encoding: 'terrarium',
+        ),
+      );
+      await map.addHillshadeLayer(
+        _hillshadeSource,
+        _hillshadeLayer,
+        const HillshadeLayerProperties(
+          hillshadeExaggeration: 0.55,
+          hillshadeShadowColor: '#2E2318',
+          hillshadeHighlightColor: '#FFFFFF',
+          hillshadeAccentColor: '#3E2723',
+        ),
+        // Over the basemap, under our tenure fills and labels so relief shades
+        // the ground without washing out boundaries or text.
+        belowLayerId: await _lowestAppLayer(map),
+      );
+    } catch (error) {
+      _toast('Terrain shading could not be drawn: $error');
+    }
+  }
+
   static const _placeLabelSource = 'owm-place-labels';
   static const _placeLabelLayer = 'owm-place-label-text';
 
@@ -1834,6 +1919,7 @@ class _MapShellState extends State<MapShell> {
           name.startsWith('owm-fill-') ||
           name.startsWith('owm-line-') ||
           name.startsWith('owm-circle-') ||
+          name == _hillshadeLayer ||
           name == _placeLabelLayer) {
         continue;
       }
@@ -1908,7 +1994,7 @@ class _MapShellState extends State<MapShell> {
     );
   }
 
-  Future<void> _syncWaypointSource() async {
+  Future<void> _syncWaypointSource({bool rebuildLayers = false}) async {
     final map = _map;
     if (!_styleReady || map == null) return;
     final featureCollection = {
@@ -1939,6 +2025,18 @@ class _MapShellState extends State<MapShell> {
       ],
     };
     await _ensureWaypointIcons();
+    // Fast path: when only the waypoint list or visibility changed, update the
+    // existing GeoJSON source in place instead of tearing down and re-adding
+    // four native layers.
+    if (!rebuildLayers && _geoJsonSources.contains('owm-waypoints')) {
+      try {
+        await map.setGeoJsonSource('owm-waypoints', featureCollection);
+        await _syncSavedTrackSource();
+        return;
+      } catch (_) {
+        _geoJsonSources.remove('owm-waypoints');
+      }
+    }
     for (final layer in const [
       'owm-waypoint-symbols',
       _waypointPinLayer,
@@ -1952,10 +2050,12 @@ class _MapShellState extends State<MapShell> {
     try {
       await map.removeSource('owm-waypoints');
     } catch (_) {}
+    _geoJsonSources.remove('owm-waypoints');
     await map.addSource(
       'owm-waypoints',
       GeojsonSourceProperties(data: featureCollection),
     );
+    _geoJsonSources.add('owm-waypoints');
     // A small dot under every glyph, marking the exact coordinate the centred
     // glyph only approximates.
     //
@@ -3739,29 +3839,27 @@ enum _MapMenuItem {
 }
 
 class _LayersHiddenChip extends StatelessWidget {
-  const _LayersHiddenChip({required this.onShow});
+  const _LayersHiddenChip({required this.onShow, required this.onDismiss});
 
   final VoidCallback onShow;
+  final VoidCallback onDismiss;
 
   @override
   Widget build(BuildContext context) => Material(
         color: const Color(0xE61B4332),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(20),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 2, 2, 2),
+          padding: const EdgeInsets.fromLTRB(10, 0, 2, 0),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.layers_clear, size: 16, color: Color(0xFFFFFBF0)),
-              const SizedBox(width: 8),
-              const Flexible(
-                child: Text(
-                  'Layers hidden. Tap a spot to see what is there.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.3,
-                    color: Color(0xFFFFFBF0),
-                  ),
+              const Icon(Icons.layers_clear, size: 15, color: Color(0xFFFFFBF0)),
+              const SizedBox(width: 6),
+              const Text(
+                'Layers hidden',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFFFFFBF0),
                 ),
               ),
               TextButton(
@@ -3769,8 +3867,19 @@ class _LayersHiddenChip extends StatelessWidget {
                 style: TextButton.styleFrom(
                   foregroundColor: const Color(0xFF76FF03),
                   visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(0, 32),
                 ),
                 child: const Text('Show'),
+              ),
+              IconButton(
+                tooltip: 'Dismiss',
+                onPressed: onDismiss,
+                icon: const Icon(Icons.close, size: 16),
+                color: const Color(0xCCFFFBF0),
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
               ),
             ],
           ),
