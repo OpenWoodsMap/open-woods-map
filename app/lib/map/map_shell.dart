@@ -3868,7 +3868,7 @@ enum _MapMenuItem {
   inView(label: 'Waypoints in this view', icon: Icons.crop_free),
   // A switch rather than a tool, but one flipped on for a minute to tell marks
   // apart and off again, so it sits with the things reached in one tap.
-  names(label: 'Names on the map', icon: Icons.label_outline),
+  names(label: 'Waypoint names', icon: Icons.label_outline),
   // My maps is deliberately absent: it lives at the foot of the basemap sheet,
   // which is where "what is the picture under my data" is already answered.
   offlinePacks(label: 'Offline packs', icon: Icons.download_for_offline_outlined),

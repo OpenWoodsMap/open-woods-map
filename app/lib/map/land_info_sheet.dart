@@ -117,7 +117,7 @@ class _LandInfoReport extends StatelessWidget {
             tabs: [
               const Tab(text: 'LAND'),
               Tab(text: openCount > 0 ? 'SEASONS ($openCount)' : 'SEASONS'),
-              const Tab(text: 'WEATHER'),
+              const Tab(text: 'SUN & WEATHER'),
             ],
           ),
           Expanded(
@@ -188,8 +188,8 @@ class _LandTab extends StatelessWidget {
         _Section(
           title: 'LOCATION',
           children: [
-            _line(
-              'Coordinates',
+            _coordinatesLine(
+              context,
               CoordinateFormatScope.of(context)
                   .format(info.latitude, info.longitude, decimals: 6),
             ),
@@ -383,7 +383,37 @@ class _Credits extends StatelessWidget {
   }
 }
 
-Widget _line(String label, String value) => Padding(
+  Widget _coordinatesLine(BuildContext context, String formatted) => InkWell(
+        onTap: () async {
+          await Clipboard.setData(ClipboardData(text: formatted));
+          if (!context.mounted) return;
+          showMessage(
+            context,
+            'Coordinates copied',
+            behavior: SnackBarBehavior.floating,
+          );
+        },
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const SizedBox(
+                width: 132,
+                child: Text(
+                  'Coordinates',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+              Expanded(child: Text(formatted)),
+              const Icon(Icons.copy, size: 16, color: Colors.black45),
+            ],
+          ),
+        ),
+      );
+
+  Widget _line(String label, String value) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

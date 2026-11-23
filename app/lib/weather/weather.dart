@@ -174,7 +174,7 @@ class WeatherService {
     try {
       response = await _client
           .get(uri, headers: {'User-Agent': 'OpenWoodsMap/0.1'})
-          .timeout(const Duration(seconds: 20));
+          .timeout(const Duration(seconds: 10));
     } catch (error) {
       // "In this card" until the map grew a wind chip that shows this same
       // message in a snackbar, where it named a card the user was not looking at.

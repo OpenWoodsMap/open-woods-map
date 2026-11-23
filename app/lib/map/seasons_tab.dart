@@ -240,48 +240,59 @@ class _Filters extends StatelessWidget {
     final groups = order.where(present.contains).toList()
       ..addAll(present.where((id) => !order.contains(id)));
 
-    return SizedBox(
-      height: 46,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-        // Residency first. It is remembered between sheets, and at the far end
-        // of a scrolling row a remembered filter would be hiding seasons from
-        // someone who cannot see that it is on.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _chip(
-            'Resident',
-            residency == Residency.resident,
-            () => onResidency(
-              residency == Residency.resident ? null : Residency.resident,
-            ),
+          // Residency on its own row so it is never hidden off-screen (it is
+          // remembered between sheets) and game categories do not get clipped
+          // mid-word at the right edge of a narrow phone.
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              _chip(
+                'Resident',
+                residency == Residency.resident,
+                () => onResidency(
+                  residency == Residency.resident ? null : Residency.resident,
+                ),
+              ),
+              _chip(
+                'Non-resident',
+                residency == Residency.nonResident,
+                () => onResidency(
+                  residency == Residency.nonResident
+                      ? null
+                      : Residency.nonResident,
+                ),
+              ),
+            ],
           ),
-          _chip(
-            'Non-resident',
-            residency == Residency.nonResident,
-            () => onResidency(
-              residency == Residency.nonResident ? null : Residency.nonResident,
-            ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              _chip('All game', group == null, () => onGroup(null)),
+              for (final id in groups)
+                _chip(pack.groupLabel(id), group == id, () => onGroup(id)),
+            ],
           ),
-          const VerticalDivider(width: 20, indent: 8, endIndent: 8),
-          _chip('All game', group == null, () => onGroup(null)),
-          for (final id in groups)
-            _chip(pack.groupLabel(id), group == id, () => onGroup(id)),
         ],
       ),
     );
   }
 
-  Widget _chip(String label, bool selected, VoidCallback onTap) => Padding(
-        padding: const EdgeInsets.only(right: 6),
-        child: FilterChip(
-          label: Text(label),
-          selected: selected,
-          onSelected: (_) => onTap(),
-          showCheckmark: false,
-          visualDensity: VisualDensity.compact,
-          selectedColor: const Color(0xFF1B4332).withValues(alpha: 0.16),
-        ),
+  Widget _chip(String label, bool selected, VoidCallback onTap) => FilterChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => onTap(),
+        showCheckmark: false,
+        visualDensity: VisualDensity.compact,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        selectedColor: const Color(0xFF1B4332).withValues(alpha: 0.16),
       );
 }
 
