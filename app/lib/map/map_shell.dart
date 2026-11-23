@@ -245,7 +245,6 @@ class _MapShellState extends State<MapShell> {
   }
 
   var _layersAllHidden = false;
-  var _layersHiddenDismissed = false;
 
   /// Fired when a new point lands on [_activeTrack], so [RecordingBar] can
   /// refresh without rebuilding the whole map shell on every 5 m GPS fix.
@@ -259,10 +258,7 @@ class _MapShellState extends State<MapShell> {
   void _onOverlaysChanged() {
     final hidden = _overlays.allHidden;
     if (!mounted || hidden == _layersAllHidden) return;
-    setState(() {
-      _layersAllHidden = hidden;
-      if (!hidden) _layersHiddenDismissed = false;
-    });
+    setState(() => _layersAllHidden = hidden);
   }
 
   @override
@@ -1026,21 +1022,6 @@ class _MapShellState extends State<MapShell> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // A bare map reads as ground with nothing on it, so say why
-                  // it is bare — but let the user dismiss it to reclaim the
-                  // screen, leaving the badge on the Layers button as the cue.
-                  if (_layersAllHidden && !_layersHiddenDismissed) ...[
-                    _LayersHiddenChip(
-                      onShow: _overlays.showLayers,
-                      onDismiss: () =>
-                          setState(() => _layersHiddenDismissed = true),
-                    ),
-                    if (_wind != null ||
-                        _windLoading ||
-                        _highlightedArea != null ||
-                        _spot != null)
-                      const SizedBox(height: 8),
-                  ],
                   if (_wind != null || _windLoading) ...[
                     WindChip(
                       reading: _wind,
@@ -3838,51 +3819,3 @@ enum _MapMenuItem {
   final IconData icon;
 }
 
-class _LayersHiddenChip extends StatelessWidget {
-  const _LayersHiddenChip({required this.onShow, required this.onDismiss});
-
-  final VoidCallback onShow;
-  final VoidCallback onDismiss;
-
-  @override
-  Widget build(BuildContext context) => Material(
-        color: const Color(0xE61B4332),
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 0, 2, 0),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.layers_clear, size: 15, color: Color(0xFFFFFBF0)),
-              const SizedBox(width: 6),
-              const Text(
-                'Layers hidden',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFFFFFBF0),
-                ),
-              ),
-              TextButton(
-                onPressed: onShow,
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF76FF03),
-                  visualDensity: VisualDensity.compact,
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  minimumSize: const Size(0, 32),
-                ),
-                child: const Text('Show'),
-              ),
-              IconButton(
-                tooltip: 'Dismiss',
-                onPressed: onDismiss,
-                icon: const Icon(Icons.close, size: 16),
-                color: const Color(0xCCFFFBF0),
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-              ),
-            ],
-          ),
-        ),
-      );
-}

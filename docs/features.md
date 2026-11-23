@@ -16,8 +16,8 @@ each feature does, and where it stops.
   parks and protected areas, hunting rules and boundaries, fishing), each with
   a checkbox for the whole group. *Hide all* clears the map for plain browsing
   and *Show layers* puts back the set that was on. While everything is hidden
-  the map says so, because a bare map otherwise reads as ground with nothing on
-  it
+  the Layers button in the top bar shows a crossed-out icon with a dot so a
+  bare map is not mistaken for ground with nothing on it
 - **Hill, mountain and wetland names:** official names from the pack's
   place-name index are drawn on the map from zoom 10, landforms in brown and
   marshes, swamps and bogs in teal. They name the patches of bush the basemap
